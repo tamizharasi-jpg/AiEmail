@@ -84,6 +84,17 @@ CATEGORY_KEYWORDS = {
     "Travel": ["flight", "itinerary", "booking", "hotel", "reservation"],
 }
 
+# Human-friendly noun phrase for each category, used to state plainly what kind of email this is.
+CATEGORY_LABELS = {
+    "Work": "work",
+    "Finance": "finance",
+    "Career": "career",
+    "Education": "educational",
+    "Personal": "personal",
+    "Shopping": "purchase",
+    "Travel": "travel",
+}
+
 
 def classify_category(joined: str, body_lower: str) -> tuple[str, int]:
     """Picks the category with the strongest keyword match and a confidence that reflects
@@ -235,6 +246,8 @@ async def analyze_email(payload: AnalyzeEmailRequest) -> AnalyzeEmailResponse:
     phishing = detect_phishing_signals(payload.subject, payload.body, sender_email)
     priority = "Critical" if suspicious else ("High" if any(term in joined for term in ["urgent", "asap", "today", "deadline", "tomorrow"]) else "Medium")
 
+    label = CATEGORY_LABELS.get(category, category.lower())
+    article = "an" if label[0] in "aeiou" else "a"
     record = EmailRecord(
         sender=re.sub(r"\s*<[^>]*>", "", payload.sender).strip() or payload.sender,
         sender_email=sender_email,
@@ -254,9 +267,9 @@ async def analyze_email(payload: AnalyzeEmailRequest) -> AnalyzeEmailResponse:
         action_required=not suspicious,
         intent="Potentially risky request" if suspicious else "General correspondence",
         summary=(
-            "This message shows warning signs such as urgency and credential or payment pressure. Verify the sender before acting."
+            f"This looks like {article} {label} email, but it shows warning signs such as urgency and credential or payment pressure. Verify the sender before acting."
             if suspicious
-            else f"A {category.lower()} email about \"{payload.subject.strip() or 'your message'}\" that looks safe and may need a reply."
+            else f"This is {article} {label} email about \"{payload.subject.strip() or 'your message'}\" that looks safe and may need a reply."
         ),
         key_information=[f"Warning sign: {term}" for term in risk_terms] or ["No warning signs detected"],
         entities=[part for part in [payload.sender, payload.subject[:40]] if part],
