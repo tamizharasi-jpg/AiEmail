@@ -20,6 +20,8 @@ from models.mailmind import (
     FeedbackResponse,
     ModelInsightsResponse,
     OverviewResponse,
+    RegenerateReplyRequest,
+    RegenerateReplyResponse,
 )
 
 router = APIRouter()
@@ -152,11 +154,26 @@ def _first_name(sender: str) -> str:
     return first.capitalize() if first and first.isalpha() else ""
 
 
-def build_reply(sender: str, subject: str, body: str) -> str:
+def build_reply(sender: str, subject: str, body: str, tone: str = "professional") -> str:
     """Rule-based reply drafted from the actual subject and body of the email."""
     text = f"{subject} {body}".lower()
-    greeting = f"Hi {_first_name(sender)}," if _first_name(sender) else "Hello,"
+    first = _first_name(sender)
+    if tone == "formal":
+        greeting = f"Dear {first}," if first else "Dear Sir/Madam,"
+        signoff = "Kind regards,"
+    elif tone == "friendly":
+        greeting = f"Hi {first}!" if first else "Hi there!"
+        signoff = "Cheers,"
+    elif tone == "short":
+        greeting = f"Hi {first}," if first else "Hi,"
+        signoff = "Thanks,"
+    else:
+        greeting = f"Hi {first}," if first else "Hello,"
+        signoff = "Best regards,"
     topic = subject.strip() or "your message"
+
+    if tone == "short":
+        return "\n".join([greeting, "", f"Got it re \"{topic}\" — I'll follow up shortly.", "", signoff])
 
     lines: list[str] = [greeting, ""]
     if any(word in text for word in ["meeting", "schedule", "call", "calendar", "slot", "availability"]):
@@ -177,7 +194,7 @@ def build_reply(sender: str, subject: str, body: str) -> str:
         lines.append("")
         lines.append(f"I've noted the timing you mentioned ({deadline.group(1)}) and will keep to it.")
 
-    lines.extend(["", "Best regards"])
+    lines.extend(["", signoff])
     return "\n".join(lines)
 
 
@@ -269,6 +286,123 @@ async def delete_email(email_id: str) -> FeedbackResponse:
     return FeedbackResponse(id=email_id, message="Email removed")
 
 
+VERDICT_TO_SPAM_STATUS = {"safe": "Legitimate", "suspicious": "Suspicious", "dangerous": "Spam"}
+VERDICT_TO_RECOMMENDED_ACTION = {"safe": "reply", "suspicious": "verify_sender", "dangerous": "report"}
+
+
+def _builtin_verdict(suspicious: bool, phishing_score: int) -> str:
+    if phishing_score >= 55 or (suspicious and phishing_score >= 30):
+        return "dangerous"
+    if suspicious:
+        return "suspicious"
+    return "safe"
+
+
+def _coerce_category(value: object, fallback: str) -> str:
+    normalized = str(value or "").strip().title()
+    return normalized if normalized in CATEGORY_ORDER else fallback
+
+
+def _coerce_priority(value: object, verdict: str) -> str:
+    if verdict == "dangerous":
+        return "Critical"
+    normalized = str(value or "").strip().lower()
+    if normalized == "high":
+        return "High"
+    if normalized == "low":
+        return "Low"
+    return "Medium"
+
+
+def _valid_evidence(items: object, haystack: str) -> list[dict]:
+    out: list[dict] = []
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            continue
+        quote = str(item.get("quote", "")).strip()
+        why = str(item.get("why", "")).strip()
+        if quote and quote in haystack:
+            out.append({"quote": quote, "why": why or "Flagged by the model"})
+    return out
+
+
+def _valid_action_items(items: object) -> list[dict]:
+    out: list[dict] = []
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            continue
+        task = str(item.get("task", "")).strip()
+        if task:
+            deadline = item.get("deadline")
+            out.append({"task": task, "deadline": str(deadline).strip() or None if deadline else None})
+    return out
+
+
+def _builtin_analysis(payload: AnalyzeEmailRequest, category: str, risk_terms: list[str], suspicious: bool,
+                       phishing: dict, extracted_info: list[str], tone: str) -> dict:
+    """Deterministic fallback that returns the exact same JSON shape the LLM would,
+    used when Ollama is not configured/unreachable."""
+    verdict = _builtin_verdict(suspicious, phishing["score"])
+    label = CATEGORY_LABELS.get(category, category.lower())
+    article = "an" if label[0] in "aeiou" else "a"
+    low_content = len(payload.body.split()) < 5
+    real_indicators = [item for item in phishing["indicators"] if item != "No warning signs detected"]
+
+    if low_content:
+        reason = "The message is too short to confidently judge, so treat it with normal caution."
+    elif verdict != "safe" and real_indicators:
+        reason = f"The email shows {', '.join(indicator.lower() for indicator in real_indicators[:2])}, so it can't be treated as safe."
+    elif verdict == "safe":
+        reason = f"No credential, payment or urgency red flags were found, and the content matches a {label} email."
+    else:
+        reason = "Multiple risk keywords were detected in the subject or body."
+
+    summary = "The message is too short to summarize confidently." if low_content else f"This is {article} {label} email about \"{payload.subject.strip() or 'your message'}\"."
+
+    action_items: list[dict] = []
+    for fact in extracted_info:
+        if fact.startswith("Deadline mentioned:"):
+            action_items.append({"task": "Respond before the mentioned deadline", "deadline": fact.split(":", 1)[1].strip()})
+        elif fact == "Meeting or call requested":
+            action_items.append({"task": "Confirm a meeting time", "deadline": None})
+        elif fact.startswith("Amount mentioned:"):
+            action_items.append({"task": f"Review the amount ({fact.split(':', 1)[1].strip()})", "deadline": None})
+        elif fact == "Contains a direct question":
+            action_items.append({"task": "Answer the sender's question", "deadline": None})
+
+    haystack = f"{payload.subject} {payload.body}"
+    evidence: list[dict] = []
+    for term in risk_terms:
+        idx = haystack.lower().find(term)
+        if idx != -1:
+            evidence.append({"quote": haystack[idx:idx + len(term)], "why": "Matches a known risk phrase"})
+
+    recommended_action = VERDICT_TO_RECOMMENDED_ACTION[verdict]
+    recommendation_text = {
+        "safe": "This looks safe to answer. Review the suggested reply below before sending.",
+        "suspicious": "Don't click any links or share information yet — confirm this is really from the sender through another channel first.",
+        "dangerous": "Do not reply, click links, or share any information. Report this email as phishing.",
+    }[verdict]
+    subject_clean = payload.subject.strip() or "your message"
+    reply_body = "" if verdict != "safe" else build_reply(payload.sender, payload.subject, payload.body, tone)
+    if low_content and verdict == "safe":
+        reply_body = build_reply(payload.sender, "your message", "Could you share a few more details so I can help?", tone)
+
+    return {
+        "verdict": verdict,
+        "category": category,
+        "priority": "high" if suspicious else "medium",
+        "reason": reason,
+        "summary": summary,
+        "action_items": action_items,
+        "evidence": evidence,
+        "recommended_action": recommended_action,
+        "recommendation_text": recommendation_text,
+        "low_content": low_content,
+        "suggested_reply": {"tone": tone, "subject": f"Re: {subject_clean}", "body": reply_body},
+    }
+
+
 @router.post("/analysis", response_model=AnalyzeEmailResponse)
 async def analyze_email(payload: AnalyzeEmailRequest) -> AnalyzeEmailResponse:
     subject_lower = payload.subject.lower()
@@ -278,46 +412,83 @@ async def analyze_email(payload: AnalyzeEmailRequest) -> AnalyzeEmailResponse:
     suspicious = len(risk_terms) >= 2
     sender_email = re.search(r"[\w.+-]+@[\w.-]+", payload.sender)
     sender_email = sender_email.group(0) if sender_email else "unknown@example.local"
-    category, category_confidence = classify_category(joined, body_lower)
+    category_hint, category_confidence = classify_category(joined, body_lower)
     phishing = detect_phishing_signals(payload.subject, payload.body, sender_email)
-    priority = "Critical" if suspicious else ("High" if any(term in joined for term in ["urgent", "asap", "today", "deadline", "tomorrow"]) else "Medium")
-
-    label = CATEGORY_LABELS.get(category, category.lower())
-    article = "an" if label[0] in "aeiou" else "a"
     extracted_info = extract_key_information(payload.subject, payload.body)
+    tone = "professional"
+
+    hints = {
+        "category": category_hint,
+        "category_confidence": category_confidence,
+        "spam_probability": min(96, 8 + len(risk_terms) * 22),
+        "phishing_indicators": phishing["indicators"],
+    }
+    sender_clean = re.sub(r"\s*<[^>]*>", "", payload.sender).strip() or payload.sender
+    llm_result = await ollama.analyze_email(sender_clean, sender_email, payload.subject, payload.body, hints, tone)
+    engine = "ollama" if llm_result else "builtin"
+    analysis = llm_result or _builtin_analysis(payload, category_hint, risk_terms, suspicious, phishing, extracted_info, tone)
+
+    verdict = analysis.get("verdict") if analysis.get("verdict") in ("safe", "suspicious", "dangerous") else _builtin_verdict(suspicious, phishing["score"])
+    category = _coerce_category(analysis.get("category"), category_hint)
+    priority = _coerce_priority(analysis.get("priority"), verdict)
+    haystack = f"{payload.subject} {payload.body}"
+    evidence = _valid_evidence(analysis.get("evidence"), haystack)
+    action_items = _valid_action_items(analysis.get("action_items"))
+    recommended_action = analysis.get("recommended_action") if analysis.get("recommended_action") in ("reply", "ignore", "report", "verify_sender") else VERDICT_TO_RECOMMENDED_ACTION[verdict]
+    suggested_reply = analysis.get("suggested_reply") or {}
+    reply_body = str(suggested_reply.get("body") or "") if verdict == "safe" else ""
+    reply_subject = str(suggested_reply.get("subject") or f"Re: {payload.subject.strip() or 'your message'}")
+    reply_tone = str(suggested_reply.get("tone") or tone)
+    low_content = bool(analysis.get("low_content", len(payload.body.split()) < 5))
+
     record = EmailRecord(
-        sender=re.sub(r"\s*<[^>]*>", "", payload.sender).strip() or payload.sender,
+        sender=sender_clean,
         sender_email=sender_email,
         subject=payload.subject,
         preview=payload.body[:120],
         body=payload.body,
         category=category,
         priority=priority,
-        spam_status="Suspicious" if suspicious else "Legitimate",
-        spam_probability=min(96, 8 + len(risk_terms) * 22),
+        spam_status=VERDICT_TO_SPAM_STATUS[verdict],
+        spam_probability=hints["spam_probability"],
         phishing_risk="High" if phishing["score"] >= 60 else ("Medium" if phishing["score"] >= 30 else "Low"),
         phishing_score=phishing["score"],
         category_confidence=category_confidence,
         security_indicators=phishing["indicators"],
         confidence=88 if suspicious else 82,
         date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-        action_required=not suspicious,
-        intent="Potentially risky request" if suspicious else "General correspondence",
-        summary=(
-            f"This looks like {article} {label} email, but it shows warning signs such as urgency and credential or payment pressure. Verify the sender before acting."
-            if suspicious
-            else f"This is {article} {label} email about \"{payload.subject.strip() or 'your message'}\" that looks safe and may need a reply."
-        ),
-        key_information=([f"Warning sign: {term}" for term in risk_terms] + extracted_info) if suspicious else extracted_info,
+        action_required=verdict == "safe",
+        intent="Potentially risky request" if verdict != "safe" else "General correspondence",
+        summary=str(analysis.get("summary") or ""),
+        key_information=extracted_info,
         entities=[part for part in [payload.sender, payload.subject[:40]] if part],
-        generated_response=None,
+        verdict=verdict,
+        reason=str(analysis.get("reason") or ""),
+        action_items=action_items,
+        evidence=evidence,
+        recommended_action=recommended_action,
+        recommendation_text=str(analysis.get("recommendation_text") or ""),
+        low_content=low_content,
+        generated_response=reply_body or None,
+        reply_subject=reply_subject,
+        reply_tone=reply_tone,
+        engine=engine,
     )
-    if not suspicious:
-        llm_reply = await ollama.generate_reply(record.sender, payload.subject, payload.body, extracted_info)
-        record.generated_response = llm_reply or build_reply(payload.sender, payload.subject, payload.body)
-        record.reply_source = "ollama" if llm_reply else "builtin"
     await db.emails.insert_one(record.model_dump())
     return AnalyzeEmailResponse(email=record)
+
+
+@router.post("/emails/{email_id}/reply", response_model=RegenerateReplyResponse)
+async def regenerate_reply(email_id: str, payload: RegenerateReplyRequest) -> RegenerateReplyResponse:
+    record = await get_email_or_404(email_id)
+    if record.recommended_action != "reply":
+        raise HTTPException(status_code=400, detail="Replies aren't generated for suspicious or dangerous emails.")
+    facts = [item.task for item in record.action_items] or None
+    llm_body = await ollama.generate_reply(record.sender, record.subject, record.body, facts, payload.tone)
+    engine = "ollama" if llm_body else "builtin"
+    body = llm_body or build_reply(record.sender, record.subject, record.body, payload.tone)
+    await db.emails.update_one({"id": email_id}, {"$set": {"generated_response": body, "reply_tone": payload.tone, "engine": engine}})
+    return RegenerateReplyResponse(id=email_id, generated_response=body, reply_subject=record.reply_subject, reply_tone=payload.tone, engine=engine)
 
 
 @router.get("/ai-status", response_model=AiStatusResponse)
@@ -471,12 +642,24 @@ async def create_feedback(payload: FeedbackCreate) -> FeedbackResponse:
     email_doc = await db.emails.find_one({"id": payload.email_id})
     is_correct = payload.is_correct
     message = "Thanks — your feedback was saved."
+
+    if payload.undo:
+        await db.emails.update_one({"id": payload.email_id}, {"$set": {"user_correction": None}})
+        await db.feedback.insert_one({"email_id": payload.email_id, "is_correct": True, "correction": None, "undo": True, "id": feedback_id, "created_at": datetime.now(timezone.utc)})
+        return FeedbackResponse(id=feedback_id, message="Correction undone.")
+
+    updates: dict = {}
     if payload.correction and email_doc:
-        current_spam = email_doc.get("spam_status")
-        is_correct = (payload.correction == "Spam" and current_spam in ("Spam", "Suspicious")) or (
-            payload.correction == "Not spam" and current_spam == "Legitimate"
+        current_verdict = email_doc.get("verdict", "safe")
+        is_correct = (payload.correction == "Safe" and current_verdict == "safe") or (
+            payload.correction in ("Spam", "Phishing") and current_verdict in ("suspicious", "dangerous")
         )
-        await db.emails.update_one({"id": payload.email_id}, {"$set": {"user_correction": payload.correction}})
+        updates["user_correction"] = payload.correction
         message = "Correction saved — it will be used for future model retraining."
+    if payload.corrected_category and payload.corrected_category in CATEGORY_ORDER and email_doc and payload.corrected_category != email_doc.get("category"):
+        updates["category"] = payload.corrected_category
+    if updates:
+        await db.emails.update_one({"id": payload.email_id}, {"$set": updates})
+
     await db.feedback.insert_one({**payload.model_dump(), "is_correct": is_correct, "id": feedback_id, "created_at": datetime.now(timezone.utc)})
     return FeedbackResponse(id=feedback_id, message=message)

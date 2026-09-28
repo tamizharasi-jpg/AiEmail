@@ -1,6 +1,18 @@
 export type Priority = "Critical" | "High" | "Medium" | "Low" | "Informational";
 export type Category = "Work" | "Finance" | "Career" | "Education" | "Personal" | "Shopping" | "Travel";
 export type SpamStatus = "Legitimate" | "Spam" | "Suspicious";
+export type Verdict = "safe" | "suspicious" | "dangerous";
+export type RecommendedAction = "reply" | "ignore" | "report" | "verify_sender";
+
+export interface ActionItem {
+  task: string;
+  deadline: string | null;
+}
+
+export interface EvidenceItem {
+  quote: string;
+  why: string;
+}
 
 export interface EmailRecord {
   id: string;
@@ -25,9 +37,18 @@ export interface EmailRecord {
   summary: string;
   key_information: string[];
   entities: string[];
+  verdict: Verdict;
+  reason: string;
+  action_items: ActionItem[];
+  evidence: EvidenceItem[];
+  recommended_action: RecommendedAction;
+  recommendation_text: string;
+  low_content: boolean;
   generated_response: string | null;
-  reply_source: "ollama" | "builtin" | null;
-  user_correction: "Spam" | "Not spam" | null;
+  reply_subject: string;
+  reply_tone: string;
+  engine: "ollama" | "builtin";
+  user_correction: "Safe" | "Spam" | "Phishing" | null;
   is_simulated: boolean;
   created_at: string;
 }
@@ -113,4 +134,12 @@ export interface AiStatusResponse {
   online: boolean;
   model: string | null;
   message: string;
+}
+
+export interface RegenerateReplyResponse {
+  id: string;
+  generated_response: string | null;
+  reply_subject: string;
+  reply_tone: string;
+  engine: "ollama" | "builtin";
 }

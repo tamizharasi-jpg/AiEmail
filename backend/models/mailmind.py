@@ -8,6 +8,18 @@ from pydantic import BaseModel, Field
 Category = Literal["Work", "Finance", "Career", "Education", "Personal", "Shopping", "Travel"]
 Priority = Literal["Critical", "High", "Medium", "Low", "Informational"]
 SpamStatus = Literal["Legitimate", "Spam", "Suspicious"]
+Verdict = Literal["safe", "suspicious", "dangerous"]
+RecommendedAction = Literal["reply", "ignore", "report", "verify_sender"]
+
+
+class ActionItem(BaseModel):
+    task: str
+    deadline: str | None = None
+
+
+class EvidenceItem(BaseModel):
+    quote: str
+    why: str
 
 
 class EmailRecord(BaseModel):
@@ -33,9 +45,18 @@ class EmailRecord(BaseModel):
     summary: str
     key_information: list[str]
     entities: list[str]
+    verdict: Verdict = "safe"
+    reason: str = ""
+    action_items: list[ActionItem] = Field(default_factory=list)
+    evidence: list[EvidenceItem] = Field(default_factory=list)
+    recommended_action: RecommendedAction = "reply"
+    recommendation_text: str = ""
+    low_content: bool = False
     generated_response: str | None = None
-    reply_source: Literal["ollama", "builtin"] | None = None
-    user_correction: Literal["Spam", "Not spam"] | None = None
+    reply_subject: str = ""
+    reply_tone: str = "professional"
+    engine: Literal["ollama", "builtin"] = "builtin"
+    user_correction: Literal["Safe", "Spam", "Phishing"] | None = None
     is_simulated: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -134,7 +155,21 @@ class AnalyzeEmailResponse(BaseModel):
 class FeedbackCreate(BaseModel):
     email_id: str
     is_correct: bool = True
-    correction: Literal["Spam", "Not spam"] | None = None
+    correction: Literal["Safe", "Spam", "Phishing"] | None = None
+    corrected_category: str | None = None
+    undo: bool = False
+
+
+class RegenerateReplyRequest(BaseModel):
+    tone: Literal["professional", "formal", "friendly", "short"] = "professional"
+
+
+class RegenerateReplyResponse(BaseModel):
+    id: str
+    generated_response: str | None
+    reply_subject: str
+    reply_tone: str
+    engine: Literal["ollama", "builtin"]
 
 
 class FeedbackResponse(BaseModel):
