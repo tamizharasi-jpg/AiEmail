@@ -75,6 +75,42 @@ def detect_phishing_signals(subject: str, body: str, sender_email: str) -> dict:
     return {"score": min(97, score), "indicators": indicators or ["No warning signs detected"]}
 
 
+def extract_key_information(subject: str, body: str) -> list[str]:
+    """The 'Extract important information' pipeline stage: pulls concrete, grounded
+    facts out of the email (deadlines, amounts, meeting requests, links, questions)
+    so both the reply generator and the UI can reference real content, not guesses."""
+    text = f"{subject} {body}"
+    lower = text.lower()
+    facts: list[str] = []
+
+    deadline = re.search(r"\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|this week|next week|by \w+day|end of day|eod)\b", lower)
+    if deadline:
+        facts.append(f"Deadline mentioned: {deadline.group(1)}")
+
+    amount = re.search(r"\$\s?\d[\d,]*(?:\.\d{2})?|\b\d+\s?(?:usd|inr|dollars)\b", text, re.IGNORECASE)
+    if amount:
+        facts.append(f"Amount mentioned: {amount.group(0).strip()}")
+
+    if any(term in lower for term in ["meeting", "call", "schedule", "calendar", "availability", "slot"]):
+        facts.append("Meeting or call requested")
+
+    if "?" in text or any(term in lower for term in ["could you", "can you", "please confirm", "let me know"]):
+        facts.append("Contains a direct question")
+
+    urls = re.findall(r"https?://[^\s]+", body)
+    if urls:
+        facts.append(f"Contains {len(urls)} link{'s' if len(urls) != 1 else ''}")
+
+    if any(term in lower for term in ["attached", "attachment"]):
+        facts.append("References an attachment")
+
+    name_match = re.search(r"\b([A-Z][a-z]+ [A-Z][a-z]+)\b", body)
+    if name_match:
+        facts.append(f"Mentions: {name_match.group(1)}")
+
+    return facts or ["No specific action items detected"]
+
+
 CATEGORY_KEYWORDS = {
     "Finance": ["payment", "invoice", "bank", "statement", "billing", "refund", "transaction"],
     "Career": ["interview", "resume", "position", "application", "hiring", "offer letter"],
@@ -248,6 +284,7 @@ async def analyze_email(payload: AnalyzeEmailRequest) -> AnalyzeEmailResponse:
 
     label = CATEGORY_LABELS.get(category, category.lower())
     article = "an" if label[0] in "aeiou" else "a"
+    extracted_info = extract_key_information(payload.subject, payload.body)
     record = EmailRecord(
         sender=re.sub(r"\s*<[^>]*>", "", payload.sender).strip() or payload.sender,
         sender_email=sender_email,
@@ -271,12 +308,12 @@ async def analyze_email(payload: AnalyzeEmailRequest) -> AnalyzeEmailResponse:
             if suspicious
             else f"This is {article} {label} email about \"{payload.subject.strip() or 'your message'}\" that looks safe and may need a reply."
         ),
-        key_information=[f"Warning sign: {term}" for term in risk_terms] or ["No warning signs detected"],
+        key_information=([f"Warning sign: {term}" for term in risk_terms] + extracted_info) if suspicious else extracted_info,
         entities=[part for part in [payload.sender, payload.subject[:40]] if part],
         generated_response=None,
     )
     if not suspicious:
-        llm_reply = await ollama.generate_reply(record.sender, payload.subject, payload.body)
+        llm_reply = await ollama.generate_reply(record.sender, payload.subject, payload.body, extracted_info)
         record.generated_response = llm_reply or build_reply(payload.sender, payload.subject, payload.body)
         record.reply_source = "ollama" if llm_reply else "builtin"
     await db.emails.insert_one(record.model_dump())

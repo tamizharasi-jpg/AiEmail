@@ -20,17 +20,21 @@ def is_configured() -> bool:
     return bool(ollama_url())
 
 
-async def generate_reply(sender: str, subject: str, body: str) -> str | None:
+async def generate_reply(sender: str, subject: str, body: str, key_information: list[str] | None = None) -> str | None:
     """Return an LLM-written reply body, or None when Ollama is unavailable."""
     base = ollama_url()
     if not base:
         return None
+    facts_block = ""
+    if key_information:
+        facts_block = "Facts already extracted from the email (ground your reply in these, do not restate them verbatim):\n" + "\n".join(f"- {fact}" for fact in key_information) + "\n\n"
     prompt = (
         "You are drafting a reply to the email below.\n"
         "Write only the reply body (60-110 words), professional and warm.\n"
         "Address the sender by first name if one is given. Respond to the specific "
         "points raised in the email. Do not invent facts, prices or commitments. "
         "Do not add a subject line or any commentary.\n\n"
+        f"{facts_block}"
         f"From: {sender or 'unknown sender'}\n"
         f"Subject: {subject}\n"
         f"Body:\n{body[:6000]}\n"
