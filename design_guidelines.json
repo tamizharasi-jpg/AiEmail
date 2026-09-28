@@ -1,0 +1,194 @@
+{
+  "theme_strategy": {
+    "default_mode": "dark",
+    "rationale": "MailMind AI is a professional AI Email Intelligence & Data Science platform designed for MSc evaluators, technical leaders, and data scientists. Deep obsidian/navy (#090D16, #0D1322) paired with crisp electric cyan (#06B6D4) and soft violet (#8B5CF6) conveys high-grade algorithmic precision, security telemetry, and modern data-lab authority without visual fatigue.",
+    "toggle_available": true
+  },
+  "typography": {
+    "font_imports": [
+      "@import \"@fontsource-variable/sora\";",
+      "@import \"@fontsource-variable/jetbrains-mono\";",
+      "@import \"@fontsource/ibm-plex-sans\";"
+    ],
+    "heading_font": "Sora Variable, sans-serif",
+    "body_font": "IBM Plex Sans, sans-serif",
+    "mono_font": "JetBrains Mono Variable, monospace",
+    "scale_px": {
+      "display": 56,
+      "h1": 40,
+      "h2": 30,
+      "h3": 22,
+      "h4": 18,
+      "body": 15,
+      "caption": 13
+    },
+    "letter_spacing": {
+      "headings": "tracking-tight",
+      "labels": "tracking-[0.15em] uppercase",
+      "body": "tracking-normal"
+    }
+  },
+  "colors": {
+    "surfaces": [
+      {
+        "name": "page",
+        "kind": "solid",
+        "bg": "#090D16",
+        "on_bg": "#F1F5F9",
+        "on_bg_muted": "#94A3B8",
+        "roles": {
+          "accent_cyan": "#06B6D4",
+          "accent_violet": "#A78BFA",
+          "border": "#1E293B",
+          "subtle_line": "#172033"
+        }
+      },
+      {
+        "name": "panel",
+        "kind": "solid",
+        "bg": "#0F172A",
+        "on_bg": "#F8FAFC",
+        "on_bg_muted": "#94A3B8",
+        "roles": {
+          "border": "#1E293B",
+          "highlight": "#38BDF8",
+          "badge_bg": "#1E293B"
+        }
+      },
+      {
+        "name": "panel_elevated",
+        "kind": "solid",
+        "bg": "#131C31",
+        "on_bg": "#FFFFFF",
+        "on_bg_muted": "#A0ABC0",
+        "roles": {
+          "border": "#283548",
+          "hover_bg": "#1A2642"
+        }
+      },
+      {
+        "name": "sidebar",
+        "kind": "solid",
+        "bg": "#0B1120",
+        "on_bg": "#E2E8F0",
+        "on_bg_muted": "#8A99AD",
+        "roles": {
+          "active_bg": "#15203B",
+          "active_text": "#38BDF8",
+          "border_r": "#1A2338"
+        }
+      },
+      {
+        "name": "topbar",
+        "kind": "solid",
+        "bg": "#0C1222",
+        "on_bg": "#F8FAFC",
+        "on_bg_muted": "#8899AC",
+        "roles": {
+          "border_b": "#1A2438",
+          "search_bg": "#111A2E"
+        }
+      },
+      {
+        "name": "badge_phishing",
+        "kind": "solid",
+        "bg": "#3B1219",
+        "on_bg": "#FCA5A5",
+        "on_bg_muted": "#F87171"
+      },
+      {
+        "name": "badge_safe",
+        "kind": "solid",
+        "bg": "#062E20",
+        "on_bg": "#6EE7B7",
+        "on_bg_muted": "#34D399"
+      },
+      {
+        "name": "badge_urgent",
+        "kind": "solid",
+        "bg": "#3D2305",
+        "on_bg": "#FCD34D",
+        "on_bg_muted": "#FBBF24"
+      },
+      {
+        "name": "landing_card",
+        "kind": "solid",
+        "bg": "#0E1528",
+        "on_bg": "#F8FAFC",
+        "on_bg_muted": "#94A3B8",
+        "roles": {
+          "border": "#1E293B",
+          "glow": "#06B6D4"
+        }
+      }
+    ],
+    "accent": "#06B6D4",
+    "on_accent": "#041B24",
+    "accent_secondary": "#8B5CF6",
+    "on_accent_secondary": "#FFFFFF"
+  },
+  "entry_surfaces": {
+    "/": "minimal product brand entry — MailMind AI title, telemetry badge + single prominent Start button",
+    "/dashboard": "desktop command grid — key ML KPIs top, pipeline health + real-time intelligence feeds below",
+    "/inbox": "desktop split inbox — dense filterable table on left (45%), deep NLP/security inspection on right (55%)",
+    "/analyze": "interactive ML pipeline lab — dual view with raw email parser, NER extraction, intent classifier, and explainability cards",
+    "/analytics": "data science telemetry studio — time-range selector, model confusion matrix, ROC-AUC comparison, SHAP feature importance"
+  },
+  "layout_and_grids": {
+    "structure": "Desktop-first persistent shell (250px collapsible sidebar, 60px command top bar with Quick Search & status badge, flex-1 scrollable work area)",
+    "sidebar_width": "250px (expanded) / 68px (collapsed)",
+    "dashboard_grid": "grid grid-cols-1 md:grid-cols-4 gap-4",
+    "split_view": "grid grid-cols-12 gap-5 h-[calc(100vh-8.5rem)]",
+    "split_table_col": "col-span-12 lg:col-span-5 flex flex-col h-full",
+    "split_inspector_col": "col-span-12 lg:col-span-7 flex flex-col h-full overflow-y-auto pr-1",
+    "spacing_rules": "Generous card padding (p-5 to p-6), 1px crisp borders (#1E293B), nested radius (parent rounded-xl: 12px, child rounded-lg: 8px)"
+  },
+  "motion_and_interactions": {
+    "engine": "motion (motion/react bundled)",
+    "hover_transitions": "transition-colors duration-150 ease-out, transition-transform duration-150 ease-out",
+    "active_click": "active:scale-[0.98]",
+    "stagger_lists": "staggerChildren: 0.05, ease: [0.16, 1, 0.3, 1]",
+    "reduced_motion": "respect prefers-reduced-motion with conditional animations",
+    "visual_effects": "Subtle 1px border shimmer on high-threat alert badges, linear telemetry scanning lines on active ML analysis"
+  },
+  "component_architecture": {
+    "app_shell": "frontend/src/components/layout/AppShell.tsx",
+    "sidebar": "frontend/src/components/layout/Sidebar.tsx",
+    "topbar": "frontend/src/components/layout/TopBar.tsx",
+    "command_palette": "frontend/src/components/command/CommandPalette.tsx",
+    "inbox_table": "frontend/src/components/inbox/EmailTable.tsx",
+    "email_detail_inspector": "frontend/src/components/inbox/EmailInspector.tsx",
+    "ml_pipeline_tester": "frontend/src/components/analyze/PipelineAnalyzer.tsx",
+    "model_metrics_charts": "frontend/src/components/analytics/ModelComparison.tsx",
+    "shap_explainability": "frontend/src/components/analytics/ShapImportance.tsx",
+    "confusion_matrix": "frontend/src/components/analytics/ConfusionMatrix.tsx",
+    "simulated_badge": "frontend/src/components/common/SimulatedDataBadge.tsx"
+  },
+  "data_science_and_nlp_features": {
+    "categories": [
+      "Phishing Detection (Random Forest + BERT)",
+      "Urgency & Priority Scoring (0-100 scale)",
+      "Sentiment & Tone Analysis (Positive/Neutral/Aggressive/Deceptive)",
+      "Named Entity Recognition (Entities: Org, Person, Money, URL, Sensitive Token)",
+      "Action Item / Intent Extraction (Regex + Zero-shot classification)",
+      "Explainability (SHAP / LIME attribution bars & high-risk token highlights)"
+    ],
+    "simulated_data_badge_policy": "Clearly display 'Simulated ML Demo' / 'Real-time FastText Model' status pills so evaluators and professors recognize genuine architectural integrity."
+  },
+  "accessibility_and_testing": {
+    "contrast_compliance": "WCAG AA (4.5:1 minimum) ensured on all dark surfaces with explicit slate-100/50 text",
+    "test_id_policy": "All interactive buttons, filter tabs, search bars, table rows, and submit triggers MUST include descriptive kebab-case data-testid attributes (e.g., data-testid=\"start-app-button\", data-testid=\"inbox-filter-phishing\", data-testid=\"analyze-submit-button\").",
+    "aria_labels": "All icon-only buttons (sidebar toggle, refresh, theme switch) carry explicit aria-label."
+  },
+  "instructions_to_main_agent": [
+    "Rebuild MailMind AI as an authoritative desktop-first AI Intelligence & Data Science SaaS.",
+    "First route ('/'): Render a clean, ultra-premium minimal landing screen with ONLY the website name 'MailMind AI', high-tech subtitle, system status indicator, and a prominent 'Start Platform' button (NO login/auth page as strictly requested by user).",
+    "Clicking 'Start' immediately routes to the main platform ('/dashboard').",
+    "Implement the persistent 250px collapsible sidebar, top bar with Quick Search (Cmd+K modal), simulated data notifications, and clean sub-routes: /dashboard, /inbox, /analyze, /analytics, /models, /settings.",
+    "Inbox must feature desktop split-view: selectable email list on left with category/threat chips, and comprehensive deep intelligence inspector on the right (Security, NLP Entities, Summarization, Sentiment, Explainability, Quick Actions).",
+    "Analyze page allows pasting raw email headers + body with real-time pipeline visualization (Tokenizer -> Feature Extraction -> BERT/RandomForest -> Explainability).",
+    "Analytics page showcases MSc-level ML metrics: Confusion Matrix, ROC-AUC Curves (BERT vs Random Forest vs Naive Bayes), SHAP Token Importance, and Time-range volume trends using preinstalled Recharts.",
+    "Use mock/simulated realistic datasets populated in MongoDB / FastAPI with fallback state if the backend is quiet.",
+    "Keep styling sharp, dense, professional, using dark obsidian slate palettes (#090D16, #0F172A), neon cyan (#06B6D4) and soft violet (#8B5CF6) highlights."
+  ]
+}

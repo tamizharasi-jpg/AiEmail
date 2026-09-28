@@ -1,0 +1,102 @@
+{
+  "iteration": 1,
+  "summary": "8/8 acceptance criteria exercised: 10 backend pytest assertions (6 test files, all passing) + 8 named browser checks (all passing, one re-verified against the public ingress URL). No bugs found.",
+  "passed": 14,
+  "failed": 0,
+  "retest_needed": false,
+  "bugs": [],
+  "action_items": [],
+  "checks": [
+    {
+      "criterion": "Minimal no-auth entry",
+      "name": "landing-start-exploring-opens-dashboard",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Landing page shows MailMind AI branding and a Start exploring button; clicking navigates directly to /dashboard with no login/register step. Re-verified against public ingress URL https://mailmind-ai-7.preview.emergentagent.com."
+    },
+    {
+      "criterion": "Premium desktop dashboard",
+      "name": "dashboard-desktop-shows-kpis-and-chart",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "At 1440x900, /dashboard shows persistent sidebar, top command search button, 'Simulated demo dataset' disclosure, Email intelligence chart, Email health ring, and Spam detected/High priority/Action required/Phishing risk KPI cards."
+    },
+    {
+      "criterion": "Premium desktop dashboard (API data)",
+      "name": "test_tscheck_dashboard_overview.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "GET /api/overview -> 200; payload includes emails_analyzed, priority_distribution (5 items), category_distribution (8 items), recent_analysis (non-empty, all is_simulated=true)."
+    },
+    {
+      "criterion": "Inbox intelligence flow",
+      "name": "inbox-search-and-suspicious-filter-narrow-results",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Inbox table renders seeded rows; typing 'verify' in search and clicking the Suspicious filter both narrow the visible row count; clicking a row navigates to /inbox/:id."
+    },
+    {
+      "criterion": "Inbox intelligence flow (API)",
+      "name": "test_tscheck_inbox_emails.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "GET /api/emails -> 200 with >=6 seeded rows; GET /api/emails?filter=suspicious -> 200, subset, all spam_status=Suspicious; GET /api/emails/demo-credential-risk -> 200, spam_status=Suspicious, phishing_risk=High, is_simulated=true."
+    },
+    {
+      "criterion": "Email intelligence detail",
+      "name": "email-detail-suspicious-shows-factors-and-feedback",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "/inbox/demo-credential-risk shows split view: original message reader, category/priority/security badges, confidence ring, 'Model influencing factors' block labeled 'Not SHAP values', safe-response text 'No response suggested until this message is verified', and feedback Yes/No control that shows 'Feedback recorded' after clicking Yes."
+    },
+    {
+      "criterion": "Analyze suspicious email",
+      "name": "analyze-suspicious-email-navigates-to-detail",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Analyze button stays disabled until sender/subject/body filled; submitting a risky body navigates to /inbox/:id showing Suspicious classification and the no-reply-draft safe-response text."
+    },
+    {
+      "criterion": "Analyze suspicious email (API)",
+      "name": "test_tscheck_analyze_email.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /api/analysis with a credential-harvesting-style body -> 200, email.spam_status=Suspicious, is_simulated=true; follow-up GET /api/emails/{id} confirms the row was actually persisted."
+    },
+    {
+      "criterion": "Analytics interaction",
+      "name": "analytics-period-control-updates-data",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "/analytics loads with 'Simulated metrics' disclosure; clicking the 7d and 90d segmented controls toggles the active class and re-renders non-empty chart columns each time."
+    },
+    {
+      "criterion": "Analytics interaction (API)",
+      "name": "test_tscheck_analytics_range.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "GET /api/analytics?period=7d|30d|90d|all -> 200 for all four ranges; each response echoes the requested period and returns a non-empty volume array."
+    },
+    {
+      "criterion": "Model insights",
+      "name": "model-insights-shows-pipeline-and-confusion-matrix",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "/model-insights shows 'Simulated evaluation' disclosure, dataset record stats, model comparison table, feature importance bars, 6-stage model pipeline, and confusion matrix with false-positive/negative labels."
+    },
+    {
+      "criterion": "Model insights (API)",
+      "name": "test_tscheck_model_insights.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "GET /api/model-insights -> 200; dataset_size=12480>0, 4 model comparison rows each with accuracy/f1, non-empty feature_importance, 2x2 confusion_matrix."
+    },
+    {
+      "criterion": "Global navigation and accessibility",
+      "name": "global-nav-sidebar-theme-and-command-palette",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Sidebar nav-analytics link routes to /analytics; sidebar-collapse-button toggles the collapsed class both ways; theme-toggle-button flips theme; Ctrl+K opens the command palette and 'Open inbox' item navigates to /inbox. No non-favicon console/page errors recorded during the flow."
+    }
+  ]
+}
