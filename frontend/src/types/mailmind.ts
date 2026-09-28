@@ -90,6 +90,22 @@ export interface ModelInsightsResponse {
   is_simulated: boolean;
 }
 
+export interface EdaResponse {
+  total: number;
+  spam_vs_ham: Array<{ label: string; value: number }>;
+  average_email_length: number;
+  average_subject_length: number;
+  email_length_buckets: Array<{ label: string; value: number }>;
+  subject_length_buckets: Array<{ label: string; value: number }>;
+  top_words: Array<{ label: string; value: number }>;
+  url_frequency: { with_url: number; without_url: number };
+  html_frequency: { html: number; plain: number };
+  character_frequency: Array<{ label: string; value: number }>;
+  category_distribution: Array<{ label: string; value: number }>;
+  priority_distribution: Array<{ label: string; value: number }>;
+  has_data: boolean;
+}
+
 export interface AnalyzeResponse {
   email: EmailRecord;
 }

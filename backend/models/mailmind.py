@@ -98,6 +98,22 @@ class ModelInsightsResponse(BaseModel):
     is_simulated: bool = True
 
 
+class EdaResponse(BaseModel):
+    total: int
+    spam_vs_ham: list[dict[str, int | str]]
+    average_email_length: int
+    average_subject_length: int
+    email_length_buckets: list[dict[str, int | str]]
+    subject_length_buckets: list[dict[str, int | str]]
+    top_words: list[dict[str, int | str]]
+    url_frequency: dict[str, int]
+    html_frequency: dict[str, int]
+    character_frequency: list[dict[str, int | str]]
+    category_distribution: list[dict[str, int | str]]
+    priority_distribution: list[dict[str, int | str]]
+    has_data: bool
+
+
 class AnalyzeEmailRequest(BaseModel):
     sender: str = "Unknown sender"
     recipients: str = ""

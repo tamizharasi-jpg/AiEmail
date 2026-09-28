@@ -13,6 +13,7 @@ from models.mailmind import (
     AnalyzeEmailRequest,
     AnalyzeEmailResponse,
     AnalyticsResponse,
+    EdaResponse,
     EmailListResponse,
     EmailRecord,
     FeedbackCreate,
@@ -25,6 +26,15 @@ router = APIRouter()
 
 PRIORITY_ORDER = ["Critical", "High", "Medium", "Low", "Informational"]
 CATEGORY_ORDER = ["Work", "Finance", "Career", "Education", "Personal", "Shopping", "Travel"]
+STOPWORDS = {
+    "the", "and", "for", "you", "your", "with", "this", "that", "from", "have", "will",
+    "are", "was", "were", "has", "had", "not", "but", "can", "our", "all", "any", "been",
+    "into", "than", "then", "them", "they", "their", "there", "here", "just", "its", "it's",
+    "please", "email", "regards", "hi", "hello", "dear", "thanks", "thank", "sincerely",
+    "about", "would", "could", "should", "when", "what", "which", "who", "how", "out",
+    "get", "got", "let", "one", "two", "new", "now", "yet", "per", "via", "over", "some",
+}
+SPECIAL_CHARS = ["!", "$", "%", "@", "#", "?", "*", "&"]
 
 
 def detect_phishing_signals(subject: str, body: str, sender_email: str) -> dict:
@@ -325,6 +335,83 @@ async def get_model_insights() -> ModelInsightsResponse:
             {"label": "Email length", "value": 31},
         ],
         pipeline=[],
+    )
+
+
+def _length_buckets(lengths: list[int], edges: list[int]) -> list[dict[str, int | str]]:
+    labels = [f"0–{edges[0]}"] + [f"{edges[i]}–{edges[i + 1]}" for i in range(len(edges) - 1)] + [f"{edges[-1]}+"]
+    counts = [0] * len(labels)
+    for length in lengths:
+        placed = False
+        for index, edge in enumerate(edges):
+            if length <= edge:
+                counts[index] += 1
+                placed = True
+                break
+        if not placed:
+            counts[-1] += 1
+    return [{"label": label, "value": count} for label, count in zip(labels, counts)]
+
+
+@router.get("/eda", response_model=EdaResponse)
+async def get_eda() -> EdaResponse:
+    docs = await db.emails.find().to_list(2000)
+    emails = [EmailRecord(**doc) for doc in docs]
+    total = len(emails)
+    if not total:
+        return EdaResponse(
+            total=0,
+            spam_vs_ham=[{"label": "Ham (legitimate)", "value": 0}, {"label": "Spam / suspicious", "value": 0}],
+            average_email_length=0,
+            average_subject_length=0,
+            email_length_buckets=[],
+            subject_length_buckets=[],
+            top_words=[],
+            url_frequency={"with_url": 0, "without_url": 0},
+            html_frequency={"html": 0, "plain": 0},
+            character_frequency=[],
+            category_distribution=[{"label": name, "value": 0} for name in CATEGORY_ORDER],
+            priority_distribution=[{"label": name, "value": 0} for name in PRIORITY_ORDER],
+            has_data=False,
+        )
+
+    ham = sum(1 for e in emails if e.spam_status == "Legitimate")
+    spam = total - ham
+    body_lengths = [len(e.body) for e in emails]
+    subject_lengths = [len(e.subject) for e in emails]
+
+    word_counts: Counter[str] = Counter()
+    url_count = 0
+    html_count = 0
+    char_counts = {char: 0 for char in SPECIAL_CHARS}
+    for email in emails:
+        text = f"{email.subject} {email.body}"
+        words = re.findall(r"[a-zA-Z]{3,}", text.lower())
+        word_counts.update(word for word in words if word not in STOPWORDS)
+        if re.search(r"https?://", email.body):
+            url_count += 1
+        if re.search(r"<\s*(a|div|p|table|br|span)[\s>]", email.body, re.IGNORECASE):
+            html_count += 1
+        for char in SPECIAL_CHARS:
+            char_counts[char] += email.body.count(char)
+
+    priorities = Counter(e.priority for e in emails)
+    categories = Counter(e.category for e in emails)
+
+    return EdaResponse(
+        total=total,
+        spam_vs_ham=[{"label": "Ham (legitimate)", "value": ham}, {"label": "Spam / suspicious", "value": spam}],
+        average_email_length=round(sum(body_lengths) / total),
+        average_subject_length=round(sum(subject_lengths) / total),
+        email_length_buckets=_length_buckets(body_lengths, [100, 250, 500, 1000]),
+        subject_length_buckets=_length_buckets(subject_lengths, [20, 40, 60, 90]),
+        top_words=[{"label": word, "value": count} for word, count in word_counts.most_common(12)],
+        url_frequency={"with_url": url_count, "without_url": total - url_count},
+        html_frequency={"html": html_count, "plain": total - html_count},
+        character_frequency=[{"label": char, "value": count} for char, count in char_counts.items() if count > 0] or [{"label": char, "value": 0} for char in SPECIAL_CHARS[:4]],
+        category_distribution=[{"label": name, "value": categories.get(name, 0)} for name in CATEGORY_ORDER],
+        priority_distribution=[{"label": name, "value": priorities.get(name, 0)} for name in PRIORITY_ORDER],
+        has_data=True,
     )
 
 
