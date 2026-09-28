@@ -3,11 +3,13 @@ import {
   AlertTriangle, ArrowLeft, Check, Copy, Cpu, EyeOff, Flag, Loader2, Reply, RotateCcw,
   ScanText, ShieldAlert, ShieldCheck, ShieldX, Sparkles, Undo2, UserSearch,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiGet, apiPost } from "@/lib/api";
 import type { Category, EmailRecord, RegenerateReplyResponse } from "@/types/mailmind";
 import AppShell from "@/components/layout/AppShell";
+
+const GlowCursor = lazy(() => import("@/components/effects/GlowCursor"));
 import { CategoryBadge, PriorityBadge } from "@/components/mailmind/StatusBadge";
 
 const CATEGORY_OPTIONS: Category[] = ["Work", "Finance", "Career", "Education", "Personal", "Shopping", "Travel"];
@@ -91,7 +93,7 @@ export default function EmailDetail() {
   };
   const scrollTo = (elementId: string) => document.getElementById(elementId)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
-  return <AppShell><div className="page-stack analysis-page" data-testid="email-detail-page">
+  return <AppShell><Suspense fallback={null}><GlowCursor /></Suspense><div className="page-stack analysis-page" data-testid="email-detail-page">
     <Link to="/dashboard" className="back-link" data-testid="email-detail-back"><ArrowLeft size={15} /> Back to overview</Link>
 
     <div className="panel email-context-card" data-testid="email-context-card">

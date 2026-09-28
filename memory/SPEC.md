@@ -50,3 +50,6 @@ The seeded email set, overview totals, analytics, and model evaluation metrics a
 ## Dataset Explorer (/dataset) — added
 - `GET /api/dataset` → record counts, class split, data-quality checks (missing fields, duplicates), unique senders, descriptive feature statistics (body/subject length, URL count, special chars, spam probability) and a 50-row preview filterable by Spam/Ham label.
 - All figures are computed from the real `emails` collection; labels come from stored verdicts (noted in the UI), not hand annotation.
+
+## GlowCursor effect
+- `frontend/src/components/effects/GlowCursor.tsx` — lazy-loaded canvas-2D cyan→violet pointer trail (no WebGL/ogl dependency). Mounted on Landing, Dashboard, Analyze and the email analysis page only; `pointer-events: none`, `mix-blend-mode: screen`, and fully disabled for `prefers-reduced-motion` or coarse (touch) pointers.

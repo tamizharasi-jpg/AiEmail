@@ -1,10 +1,12 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { LockKeyhole, Play, RotateCcw, Sparkles, UploadCloud } from "lucide-react";
-import { useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiGet, apiPost } from "@/lib/api";
 import type { AiStatusResponse, AnalyzeResponse } from "@/types/mailmind";
 import AppShell from "@/components/layout/AppShell";
+
+const GlowCursor = lazy(() => import("@/components/effects/GlowCursor"));
 
 export default function Analyze() {
   const navigate = useNavigate();
@@ -27,7 +29,7 @@ export default function Analyze() {
     if (!subject) setSubject(file.name.replace(/\.[^.]+$/, ""));
   };
 
-  return <AppShell><div className="page-stack" data-testid="analyze-page">
+  return <AppShell><Suspense fallback={null}><GlowCursor /></Suspense><div className="page-stack" data-testid="analyze-page">
     <div className="page-heading compact">
       <div><div className="eyebrow"><Sparkles size={12} /> New analysis</div><h1>Let AI understand your email.</h1><p>Paste an email or drop a file, and MailMind will explain what it is and what to do next.</p></div>
       <div className="privacy-note" data-testid="ai-status-chip"><LockKeyhole size={14} /> {aiStatus.data?.message ?? "Checking reply engine..."}</div>

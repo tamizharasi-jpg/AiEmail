@@ -1,9 +1,12 @@
+import { lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, BrainCircuit, ChevronRight, CircleAlert, Clock3, MailCheck, ShieldCheck, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { apiGet } from "@/lib/api";
 import type { OverviewResponse } from "@/types/mailmind";
 import AppShell from "@/components/layout/AppShell";
+
+const GlowCursor = lazy(() => import("@/components/effects/GlowCursor"));
 import Sparkline from "@/components/charts/Sparkline";
 import { CategoryBadge, PriorityBadge, SpamBadge } from "@/components/mailmind/StatusBadge";
 
@@ -24,7 +27,7 @@ function LineChart({ data }: { data: OverviewResponse["volume_trend"] }) {
 
 export default function Dashboard() {
   const { data, isError, isLoading } = useQuery({ queryKey: ["overview"], queryFn: () => apiGet<OverviewResponse>("/overview") });
-  return <AppShell><div className="page-stack" data-testid="dashboard-page">
+  return <AppShell><Suspense fallback={null}><GlowCursor /></Suspense><div className="page-stack" data-testid="dashboard-page">
     <div className="page-heading"><div><div className="eyebrow"><span className="live-dot" /> Live intelligence workspace</div><h1>Good morning <span className="wave">✦</span></h1><p>Here’s what MailMind discovered across your analyzed emails.</p></div><div className="heading-actions"><Link to="/analyze" className="button-primary" data-testid="dashboard-analyze-button"><MailCheck size={16} /> Analyze new email</Link></div></div>
     {isError && <div className="inline-error" data-testid="dashboard-error">The intelligence service is unavailable. The workspace shell is still available.</div>}
     <section className="overview-grid">
