@@ -14,6 +14,9 @@ export interface EmailRecord {
   spam_status: SpamStatus;
   spam_probability: number;
   phishing_risk: "Low" | "Medium" | "High";
+  phishing_score: number;
+  category_confidence: number;
+  security_indicators: string[];
   confidence: number;
   date: string;
   model_version: string;
@@ -24,6 +27,7 @@ export interface EmailRecord {
   entities: string[];
   generated_response: string | null;
   reply_source: "ollama" | "builtin" | null;
+  user_correction: "Spam" | "Not spam" | null;
   is_simulated: boolean;
   created_at: string;
 }

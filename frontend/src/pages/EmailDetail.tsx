@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, Copy, MessageSquareText, Reply, ShieldAlert, Sparkles, ThumbsDown, ThumbsUp } from "lucide-react";
+import { ArrowLeft, Check, Copy, MessageSquareText, Reply, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiGet, apiPost } from "@/lib/api";
@@ -7,13 +7,36 @@ import type { EmailRecord } from "@/types/mailmind";
 import AppShell from "@/components/layout/AppShell";
 import { CategoryBadge, PriorityBadge, SpamBadge } from "@/components/mailmind/StatusBadge";
 
+/** Risk-type metrics: higher value = more concerning (spam / phishing signal strength). */
+function riskTone(value: number): "tone-safe" | "tone-warn" | "tone-risk" {
+  if (value >= 60) return "tone-risk";
+  if (value >= 30) return "tone-warn";
+  return "tone-safe";
+}
+
+/** Confidence-type metrics: lower value = more concerning (weak category match). */
+function confidenceTone(value: number): "tone-safe" | "tone-warn" | "tone-risk" {
+  if (value >= 70) return "tone-safe";
+  if (value >= 45) return "tone-warn";
+  return "tone-risk";
+}
+
+function SignalRow({ label, value, tone, testId }: { label: string; value: number; tone: string; testId: string }) {
+  return <div className="signal-row" data-testid={testId}>
+    <div className="signal-label"><span>{label}</span><strong className={tone}>{value}%</strong></div>
+    <div className="signal-track"><i className={tone} style={{ width: `${Math.min(100, Math.max(0, value))}%` }} /></div>
+  </div>;
+}
+
+interface FeedbackResult { id: string; message: string; is_simulated: boolean }
+
 export default function EmailDetail() {
   const { id = "" } = useParams();
   const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
   const { data, isLoading, isError } = useQuery({ queryKey: ["email", id], queryFn: () => apiGet<EmailRecord>(`/emails/${id}`) });
-  const feedback = useMutation({
-    mutationFn: (is_correct: boolean) => apiPost("/feedback", { email_id: id, is_correct }),
+  const correction = useMutation({
+    mutationFn: (label: "Spam" | "Not spam") => apiPost<FeedbackResult>("/feedback", { email_id: id, correction: label }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["email", id] }),
   });
 
@@ -45,6 +68,23 @@ export default function EmailDetail() {
         <div className="intelligence-header">
           <div><span className="eyebrow"><Sparkles size={12} /> AI insights</span><h2>What MailMind found</h2></div>
         </div>
+
+        <div className="classification-card" data-testid="classification-card">
+          <div className="classification-top">
+            <div>
+              <span className="eyebrow classification-eyebrow">Classification</span>
+              <h3 className="classification-title">{data.spam_status}</h3>
+            </div>
+            <span className="classification-badge" data-testid="classification-priority-badge">{data.priority}</span>
+          </div>
+          <p className="classification-desc">{data.subject} was assessed as {data.category} with {data.priority.toLowerCase()} priority.</p>
+          <div className="signal-bars">
+            <SignalRow label="Spam probability" value={data.spam_probability} tone={riskTone(data.spam_probability)} testId="signal-spam-probability" />
+            <SignalRow label="Phishing supporting signal" value={data.phishing_score} tone={riskTone(data.phishing_score)} testId="signal-phishing-score" />
+            <SignalRow label="Category confidence" value={data.category_confidence} tone={confidenceTone(data.category_confidence)} testId="signal-category-confidence" />
+          </div>
+        </div>
+
         <div className="confidence-box">
           <div className="confidence-ring" style={{ "--confidence": `${data.confidence * 3.6}deg` } as React.CSSProperties}>
             <div><strong>{data.confidence}%</strong><span>confidence</span></div>
@@ -55,13 +95,9 @@ export default function EmailDetail() {
           </div>
         </div>
         <div className="insight-stack">
-          <div className="insight-block">
-            <div className="insight-title"><span>Safety</span></div>
-            <div className="insight-result"><SpamBadge value={data.spam_status} /><span>{data.spam_probability}% spam likelihood</span></div>
-          </div>
-          <div className="insight-block">
-            <div className="insight-title"><span>Priority</span></div>
-            <div className="insight-result"><PriorityBadge value={data.priority} /><span>{data.action_required ? "Reply recommended" : "No action needed"}</span></div>
+          <div className="insight-block" data-testid="security-indicators-block">
+            <div className="insight-title"><span>{risky ? <ShieldAlert size={13} /> : <ShieldCheck size={13} />} Security signals</span></div>
+            <ul className="key-list">{data.security_indicators.map((item) => <li key={item} className={risky ? "flag-risk" : undefined}>{risky ? <ShieldAlert size={13} /> : <Check size={13} />}{item}</li>)}</ul>
           </div>
           <div className="insight-block">
             <div className="insight-title"><span>Summary</span></div>
@@ -84,13 +120,14 @@ export default function EmailDetail() {
           {!risky && reply && <button className="button-secondary reply-cta" data-testid="email-reply-button"><Reply size={15} /> Use this draft</button>}
         </div>
 
-        <div className="feedback-box">
-          <span>Was this useful?</span>
-          <div>
-            <button onClick={() => feedback.mutate(true)} data-testid="feedback-yes-button"><ThumbsUp size={14} /> Yes</button>
-            <button onClick={() => feedback.mutate(false)} data-testid="feedback-no-button"><ThumbsDown size={14} /> No</button>
+        <div className="correction-box" data-testid="correction-box">
+          <span className="correction-heading">Correct this prediction</span>
+          <p>Your corrections are saved as feedback for future model improvement.</p>
+          <div className="correction-buttons">
+            <button className={data.user_correction === "Not spam" ? "selected" : ""} onClick={() => correction.mutate("Not spam")} disabled={correction.isPending} data-testid="correction-not-spam-button">Not spam</button>
+            <button className={data.user_correction === "Spam" ? "selected" : ""} onClick={() => correction.mutate("Spam")} disabled={correction.isPending} data-testid="correction-spam-button">Spam</button>
           </div>
-          {feedback.isSuccess && <small data-testid="feedback-success">Feedback recorded</small>}
+          {correction.isSuccess && <small data-testid="correction-success">{correction.data.message}</small>}
         </div>
       </aside>
     </div>

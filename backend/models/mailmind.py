@@ -22,6 +22,9 @@ class EmailRecord(BaseModel):
     spam_status: SpamStatus
     spam_probability: int
     phishing_risk: Literal["Low", "Medium", "High"]
+    phishing_score: int = 0
+    category_confidence: int = 50
+    security_indicators: list[str] = Field(default_factory=list)
     confidence: int
     date: str
     model_version: str = "Demo model v1.0"
@@ -32,6 +35,7 @@ class EmailRecord(BaseModel):
     entities: list[str]
     generated_response: str | None = None
     reply_source: Literal["ollama", "builtin"] | None = None
+    user_correction: Literal["Spam", "Not spam"] | None = None
     is_simulated: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -113,8 +117,8 @@ class AnalyzeEmailResponse(BaseModel):
 
 class FeedbackCreate(BaseModel):
     email_id: str
-    is_correct: bool
-    correction: str | None = None
+    is_correct: bool = True
+    correction: Literal["Spam", "Not spam"] | None = None
 
 
 class FeedbackResponse(BaseModel):

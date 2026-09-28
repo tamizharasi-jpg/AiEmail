@@ -27,6 +27,67 @@ PRIORITY_ORDER = ["Critical", "High", "Medium", "Low", "Informational"]
 CATEGORY_ORDER = ["Work", "Finance", "Career", "Education", "Personal", "Shopping", "Travel"]
 
 
+def detect_phishing_signals(subject: str, body: str, sender_email: str) -> dict:
+    """Rule-based phishing detector: scans the actual subject/body/sender for concrete
+    indicators instead of a fabricated number, and returns a supporting-signal score."""
+    text = f"{subject} {body}".lower()
+    indicators: list[str] = []
+    score = 4
+
+    urls = re.findall(r"https?://[^\s]+", body)
+    if urls:
+        looks_baited = any(term in text for term in ["click here", "verify", "confirm", "login", "reset your password", "bit.ly"])
+        indicators.append(f"Suspicious URL ({len(urls)} link{'s' if len(urls) != 1 else ''})")
+        score += 22 if looks_baited else 8
+
+    if any(term in text for term in ["password", "login credentials", "verify your identity", "confirm your account", "security code", "one-time password", "otp", "social security"]):
+        indicators.append("Credential request")
+        score += 24
+
+    if any(term in text for term in ["urgent", "immediately", "act now", "within 24 hours", "account suspended", "will be closed", "final notice", "expire"]):
+        indicators.append("Urgency pattern")
+        score += 16
+
+    if any(term in text for term in ["bitcoin", "gift card", "wire transfer", "bank account", "beneficiary", "lottery", "winner", "inheritance", "claim your prize"]):
+        indicators.append("Financial request")
+        score += 22
+
+    brand_terms = ["bank", "paypal", "amazon", "apple", "microsoft", "netflix"]
+    mentioned_brand = next((brand for brand in brand_terms if brand in text), None)
+    if mentioned_brand and mentioned_brand not in sender_email.lower():
+        indicators.append("Sender / brand domain mismatch")
+        score += 18
+
+    if any(term in text for term in ["attached", "attachment", ".exe", ".zip", ".scr"]) and len(indicators) >= 1:
+        indicators.append("Risky attachment reference")
+        score += 10
+
+    return {"score": min(97, score), "indicators": indicators or ["No warning signs detected"]}
+
+
+CATEGORY_KEYWORDS = {
+    "Finance": ["payment", "invoice", "bank", "statement", "billing", "refund", "transaction"],
+    "Career": ["interview", "resume", "position", "application", "hiring", "offer letter"],
+    "Education": ["course", "lecture", "assignment", "exam", "study", "semester"],
+    "Personal": ["appointment", "reminder", "family", "birthday", "personal"],
+    "Shopping": ["order", "shipment", "delivery", "cart", "discount"],
+    "Travel": ["flight", "itinerary", "booking", "hotel", "reservation"],
+}
+
+
+def classify_category(joined: str, body_lower: str) -> tuple[str, int]:
+    """Picks the category with the strongest keyword match and a confidence that reflects
+    how many real signals were found, instead of a fixed number."""
+    best_category = "Work"
+    best_hits = 0
+    for category, keywords in CATEGORY_KEYWORDS.items():
+        hits = sum(1 for keyword in keywords if keyword in joined)
+        if hits > best_hits:
+            best_category, best_hits = category, hits
+    confidence = min(96, 44 + best_hits * 16) if best_hits else 32 + min(18, len(body_lower.split()) // 10)
+    return best_category, confidence
+
+
 def _first_name(sender: str) -> str:
     cleaned = re.split(r"[<@]", sender.strip())[0].strip()
     cleaned = re.sub(r"[._-]+", " ", cleaned).strip()
@@ -158,19 +219,15 @@ async def analyze_email(payload: AnalyzeEmailRequest) -> AnalyzeEmailResponse:
     joined = f"{subject_lower} {body_lower}"
     risk_terms = [term for term in ["urgent", "password", "verify", "click here", "suspended", "beneficiary", "lottery", "winner", "bitcoin", "gift card"] if term in joined]
     suspicious = len(risk_terms) >= 2
-    if any(term in body_lower for term in ["payment", "invoice", "bank", "statement", "billing"]):
-        category = "Finance"
-    elif any(term in joined for term in ["interview", "resume", "position", "application", "hiring"]):
-        category = "Career"
-    elif any(term in joined for term in ["course", "lecture", "assignment", "exam", "study"]):
-        category = "Education"
-    else:
-        category = "Work"
+    sender_email = re.search(r"[\w.+-]+@[\w.-]+", payload.sender)
+    sender_email = sender_email.group(0) if sender_email else "unknown@example.local"
+    category, category_confidence = classify_category(joined, body_lower)
+    phishing = detect_phishing_signals(payload.subject, payload.body, sender_email)
     priority = "Critical" if suspicious else ("High" if any(term in joined for term in ["urgent", "asap", "today", "deadline", "tomorrow"]) else "Medium")
 
     record = EmailRecord(
         sender=re.sub(r"\s*<[^>]*>", "", payload.sender).strip() or payload.sender,
-        sender_email=(re.search(r"[\w.+-]+@[\w.-]+", payload.sender).group(0) if re.search(r"[\w.+-]+@[\w.-]+", payload.sender) else "unknown@example.local"),
+        sender_email=sender_email,
         subject=payload.subject,
         preview=payload.body[:120],
         body=payload.body,
@@ -178,7 +235,10 @@ async def analyze_email(payload: AnalyzeEmailRequest) -> AnalyzeEmailResponse:
         priority=priority,
         spam_status="Suspicious" if suspicious else "Legitimate",
         spam_probability=min(96, 8 + len(risk_terms) * 22),
-        phishing_risk="High" if suspicious else "Low",
+        phishing_risk="High" if phishing["score"] >= 60 else ("Medium" if phishing["score"] >= 30 else "Low"),
+        phishing_score=phishing["score"],
+        category_confidence=category_confidence,
+        security_indicators=phishing["indicators"],
         confidence=88 if suspicious else 82,
         date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         action_required=not suspicious,
@@ -271,5 +331,15 @@ async def get_model_insights() -> ModelInsightsResponse:
 @router.post("/feedback", response_model=FeedbackResponse)
 async def create_feedback(payload: FeedbackCreate) -> FeedbackResponse:
     feedback_id = str(uuid.uuid4())
-    await db.feedback.insert_one({**payload.model_dump(), "id": feedback_id, "created_at": datetime.now(timezone.utc)})
-    return FeedbackResponse(id=feedback_id, message="Thanks — your feedback was saved.")
+    email_doc = await db.emails.find_one({"id": payload.email_id})
+    is_correct = payload.is_correct
+    message = "Thanks — your feedback was saved."
+    if payload.correction and email_doc:
+        current_spam = email_doc.get("spam_status")
+        is_correct = (payload.correction == "Spam" and current_spam in ("Spam", "Suspicious")) or (
+            payload.correction == "Not spam" and current_spam == "Legitimate"
+        )
+        await db.emails.update_one({"id": payload.email_id}, {"$set": {"user_correction": payload.correction}})
+        message = "Correction saved — it will be used for future model retraining."
+    await db.feedback.insert_one({**payload.model_dump(), "is_correct": is_correct, "id": feedback_id, "created_at": datetime.now(timezone.utc)})
+    return FeedbackResponse(id=feedback_id, message=message)
