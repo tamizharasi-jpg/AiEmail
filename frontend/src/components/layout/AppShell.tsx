@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Command, LayoutDashboard, MailPlus, PanelLeftClose, PanelLeftOpen, ScanText, Search, Sparkles, Waypoints, X } from "lucide-react";
+import { Command, Database, LayoutDashboard, MailPlus, PanelLeftClose, PanelLeftOpen, ScanText, Search, ShieldAlert, Sparkles, Waypoints, X } from "lucide-react";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -9,7 +9,9 @@ interface AppShellProps {
 const navItems = [
   { label: "Overview", to: "/dashboard", icon: LayoutDashboard },
   { label: "Analyze email", to: "/analyze", icon: MailPlus },
+  { label: "Spam & security", to: "/spam", icon: ShieldAlert },
   { label: "Model insights", to: "/model-insights", icon: Waypoints },
+  { label: "Dataset explorer", to: "/dataset", icon: Database },
   { label: "EDA", to: "/eda", icon: ScanText },
 ];
 
@@ -75,7 +77,7 @@ export default function AppShell({ children }: AppShellProps) {
         <div className="command-palette" onClick={(event) => event.stopPropagation()} role="dialog" aria-label="Command palette" data-testid="command-palette">
           <div className="palette-input"><Search size={17} /><input autoFocus placeholder="Search or jump to..." data-testid="command-palette-input" /><button onClick={() => setPaletteOpen(false)} data-testid="command-palette-close"><X size={16} /></button></div>
           <div className="palette-label">Quick actions</div>
-          {[{ label: "Open overview", path: "/dashboard", icon: LayoutDashboard }, { label: "Analyze an email", path: "/analyze", icon: MailPlus }, { label: "Model insights", path: "/model-insights", icon: Waypoints }, { label: "Exploratory data analysis", path: "/eda", icon: ScanText }].map(({ label, path, icon: Icon }) => <button key={path} className="palette-item" onClick={() => runCommand(path)} data-testid={`command-${label.toLowerCase().replaceAll(" ", "-")}`}><Icon size={16} /><span>{label}</span><span className="palette-enter">↵</span></button>)}
+          {[{ label: "Open overview", path: "/dashboard", icon: LayoutDashboard }, { label: "Analyze an email", path: "/analyze", icon: MailPlus }, { label: "Model insights", path: "/model-insights", icon: Waypoints }, { label: "Exploratory data analysis", path: "/eda", icon: ScanText }, { label: "Spam and security", path: "/spam", icon: ShieldAlert }, { label: "Dataset explorer", path: "/dataset", icon: Database }].map(({ label, path, icon: Icon }) => <button key={path} className="palette-item" onClick={() => runCommand(path)} data-testid={`command-${label.toLowerCase().replaceAll(" ", "-")}`}><Icon size={16} /><span>{label}</span><span className="palette-enter">↵</span></button>)}
           <div className="palette-footer"><span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span><span><kbd>↵</kbd> Select</span><span><kbd>esc</kbd> Close</span></div>
         </div>
       </div>}

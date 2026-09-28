@@ -22,6 +22,12 @@ from models.mailmind import (
     OverviewResponse,
     RegenerateReplyRequest,
     RegenerateReplyResponse,
+    SecurityResponse,
+    ThreatCell,
+    IndicatorStat,
+    DatasetResponse,
+    DatasetRow,
+    FeatureStat,
 )
 
 router = APIRouter()
@@ -663,3 +669,162 @@ async def create_feedback(payload: FeedbackCreate) -> FeedbackResponse:
 
     await db.feedback.insert_one({**payload.model_dump(), "is_correct": is_correct, "id": feedback_id, "created_at": datetime.now(timezone.utc)})
     return FeedbackResponse(id=feedback_id, message=message)
+
+
+async def _all_emails(limit: int = 2000) -> list[EmailRecord]:
+    """Tolerant loader: legacy documents may carry values the current schema rejects."""
+    docs = await db.emails.find().sort("created_at", -1).to_list(limit)
+    emails: list[EmailRecord] = []
+    for doc in docs:
+        if doc.get("user_correction") not in ("Safe", "Spam", "Phishing", None):
+            doc["user_correction"] = None
+        try:
+            emails.append(EmailRecord(**doc))
+        except Exception:
+            continue
+    return emails
+
+
+INDICATOR_EXPLANATIONS = {
+    "Suspicious URL": "The body links to a domain that does not match the claimed sender.",
+    "Sender/domain mismatch": "Display name and sending domain disagree — a classic spoofing sign.",
+    "Credential request": "The email asks for a password, OTP, card or account details.",
+    "Urgency pattern": "Threats or countdowns are used to rush the reader into acting.",
+    "Financial request": "Money, fees or bank transfers are requested.",
+    "Attachment": "An unexpected attachment is referenced.",
+    "External domain": "The sending domain is outside your known contacts.",
+    "Free email domain": "A business claim is sent from a free consumer mailbox.",
+}
+
+
+@router.get("/security", response_model=SecurityResponse)
+async def get_security() -> SecurityResponse:
+    emails = await _all_emails()
+    total = len(emails)
+    legitimate = sum(1 for e in emails if e.verdict == "safe")
+    suspicious = sum(1 for e in emails if e.verdict == "suspicious")
+    spam = sum(1 for e in emails if e.verdict == "dangerous")
+    phishing = sum(1 for e in emails if e.phishing_risk == "High")
+    needs_review = sum(1 for e in emails if e.confidence < 70 or e.verdict == "suspicious")
+
+    def cell(spam_axis: str, risk_axis: str) -> int:
+        count = 0
+        for e in emails:
+            high_spam = e.spam_probability >= 50
+            high_risk = e.phishing_risk in ("Medium", "High")
+            if (high_spam == (spam_axis == "high")) and (high_risk == (risk_axis == "high")):
+                count += 1
+        return count
+
+    matrix = [
+        ThreatCell(key="legitimate", label="Legitimate", spam_axis="low", risk_axis="low", count=cell("low", "low"),
+                   description="Low spam score and no phishing signals — safe to read and reply."),
+        ThreatCell(key="review", label="Needs review", spam_axis="low", risk_axis="high", count=cell("low", "high"),
+                   description="Reads legitimate but carries risky signals. Verify the sender before acting."),
+        ThreatCell(key="spam", label="Spam", spam_axis="high", risk_axis="low", count=cell("high", "low"),
+                   description="Unwanted bulk or promotional mail without a targeted attack pattern."),
+        ThreatCell(key="phishing", label="Phishing risk", spam_axis="high", risk_axis="high", count=cell("high", "high"),
+                   description="High spam score combined with credential or payment bait. Report these."),
+    ]
+
+    counter: Counter[str] = Counter()
+    for email in emails:
+        counter.update(email.security_indicators)
+    indicators = [
+        IndicatorStat(label=label, count=count, explanation=INDICATOR_EXPLANATIONS.get(label, "Detected by the rule-based security scanner."))
+        for label, count in counter.most_common(9)
+        if "no warning" not in label.lower()
+    ][:8]
+
+    risky = sorted(
+        [e for e in emails if e.verdict != "safe" or e.spam_probability >= 50 or e.phishing_risk != "Low"],
+        key=lambda e: (e.spam_probability, e.phishing_score),
+        reverse=True,
+    )
+
+    return SecurityResponse(
+        total=total,
+        legitimate=legitimate,
+        spam=spam,
+        suspicious=suspicious,
+        phishing_risk=phishing,
+        needs_review=needs_review,
+        threat_matrix=matrix,
+        indicators=indicators,
+        items=risky[:40],
+        has_data=total > 0,
+    )
+
+
+def _stat(name: str, unit: str, values: list[float]) -> FeatureStat:
+    ordered = sorted(values)
+    count = len(ordered)
+    median = 0.0 if not count else (ordered[count // 2] if count % 2 else (ordered[count // 2 - 1] + ordered[count // 2]) / 2)
+    return FeatureStat(
+        name=name,
+        unit=unit,
+        minimum=round(ordered[0], 2) if count else 0.0,
+        maximum=round(ordered[-1], 2) if count else 0.0,
+        mean=round(sum(ordered) / count, 2) if count else 0.0,
+        median=round(median, 2),
+    )
+
+
+@router.get("/dataset", response_model=DatasetResponse)
+async def get_dataset() -> DatasetResponse:
+    emails = await _all_emails()
+    total = len(emails)
+    if not total:
+        return DatasetResponse(total_records=0, spam_records=0, legitimate_records=0, missing_values=0,
+                               duplicate_records=0, average_email_length=0, unique_senders=0,
+                               feature_stats=[], rows=[], has_data=False)
+
+    spam_records = sum(1 for e in emails if e.verdict != "safe")
+    body_lengths = [float(len(e.body)) for e in emails]
+    subject_lengths = [float(len(e.subject)) for e in emails]
+    url_counts = [float(len(re.findall(r"https?://", e.body))) for e in emails]
+    special_counts = [float(sum(e.body.count(c) for c in SPECIAL_CHARS)) for e in emails]
+    spam_probs = [float(e.spam_probability) for e in emails]
+
+    missing_values = sum(1 for e in emails if not e.body.strip() or not e.subject.strip() or not e.sender_email.strip())
+    seen: set[tuple[str, str]] = set()
+    duplicates = 0
+    for email in emails:
+        key = (email.subject.strip().lower(), email.body.strip().lower()[:300])
+        if key in seen:
+            duplicates += 1
+        seen.add(key)
+
+    rows = [
+        DatasetRow(
+            id=e.id,
+            sender=e.sender,
+            subject=e.subject,
+            category=e.category,
+            priority=e.priority,
+            label="Spam" if e.verdict != "safe" else "Ham",
+            body_length=len(e.body),
+            url_count=len(re.findall(r"https?://", e.body)),
+            spam_probability=e.spam_probability,
+        )
+        for e in emails[:50]
+    ]
+
+    return DatasetResponse(
+        total_records=total,
+        spam_records=spam_records,
+        legitimate_records=total - spam_records,
+        missing_values=missing_values,
+        duplicate_records=duplicates,
+        average_email_length=round(sum(body_lengths) / total),
+        unique_senders=len({e.sender_email.lower() for e in emails}),
+        feature_stats=[
+            _stat("Body length", "chars", body_lengths),
+            _stat("Subject length", "chars", subject_lengths),
+            _stat("URL count", "links", url_counts),
+            _stat("Special characters", "chars", special_counts),
+            _stat("Spam probability", "%", spam_probs),
+        ],
+        rows=rows,
+        has_data=True,
+    )

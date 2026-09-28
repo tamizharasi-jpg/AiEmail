@@ -135,6 +135,68 @@ class EdaResponse(BaseModel):
     has_data: bool
 
 
+class ThreatCell(BaseModel):
+    key: str
+    label: str
+    spam_axis: Literal["low", "high"]
+    risk_axis: Literal["low", "high"]
+    count: int
+    description: str
+
+
+class IndicatorStat(BaseModel):
+    label: str
+    count: int
+    explanation: str
+
+
+class SecurityResponse(BaseModel):
+    total: int
+    legitimate: int
+    spam: int
+    suspicious: int
+    phishing_risk: int
+    needs_review: int
+    threat_matrix: list[ThreatCell]
+    indicators: list[IndicatorStat]
+    items: list[EmailRecord]
+    has_data: bool
+
+
+class FeatureStat(BaseModel):
+    name: str
+    unit: str
+    minimum: float
+    maximum: float
+    mean: float
+    median: float
+
+
+class DatasetRow(BaseModel):
+    id: str
+    sender: str
+    subject: str
+    category: str
+    priority: str
+    label: str
+    body_length: int
+    url_count: int
+    spam_probability: int
+
+
+class DatasetResponse(BaseModel):
+    total_records: int
+    spam_records: int
+    legitimate_records: int
+    missing_values: int
+    duplicate_records: int
+    average_email_length: int
+    unique_senders: int
+    feature_stats: list[FeatureStat]
+    rows: list[DatasetRow]
+    has_data: bool
+
+
 class AnalyzeEmailRequest(BaseModel):
     sender: str = "Unknown sender"
     recipients: str = ""

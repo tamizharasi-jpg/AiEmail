@@ -143,3 +143,65 @@ export interface RegenerateReplyResponse {
   reply_tone: string;
   engine: "ollama" | "builtin";
 }
+
+export interface ThreatCell {
+  key: string;
+  label: string;
+  spam_axis: "low" | "high";
+  risk_axis: "low" | "high";
+  count: number;
+  description: string;
+}
+
+export interface IndicatorStat {
+  label: string;
+  count: number;
+  explanation: string;
+}
+
+export interface SecurityResponse {
+  total: number;
+  legitimate: number;
+  spam: number;
+  suspicious: number;
+  phishing_risk: number;
+  needs_review: number;
+  threat_matrix: ThreatCell[];
+  indicators: IndicatorStat[];
+  items: EmailRecord[];
+  has_data: boolean;
+}
+
+export interface FeatureStat {
+  name: string;
+  unit: string;
+  minimum: number;
+  maximum: number;
+  mean: number;
+  median: number;
+}
+
+export interface DatasetRow {
+  id: string;
+  sender: string;
+  subject: string;
+  category: string;
+  priority: string;
+  label: string;
+  body_length: number;
+  url_count: number;
+  spam_probability: number;
+}
+
+export interface DatasetResponse {
+  total_records: number;
+  spam_records: number;
+  legitimate_records: number;
+  missing_values: number;
+  duplicate_records: number;
+  average_email_length: number;
+  unique_senders: number;
+  feature_stats: FeatureStat[];
+  rows: DatasetRow[];
+  has_data: boolean;
+}

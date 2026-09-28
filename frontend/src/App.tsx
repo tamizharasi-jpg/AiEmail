@@ -5,6 +5,8 @@ import EmailDetail from "@/pages/EmailDetail";
 import Analyze from "@/pages/Analyze";
 import ModelInsights from "@/pages/ModelInsights";
 import Eda from "@/pages/Eda";
+import Spam from "@/pages/Spam";
+import Dataset from "@/pages/Dataset";
 
 // One <Route> per page in src/pages; BrowserRouter already wraps this in main.tsx.
 export default function App() {
@@ -16,6 +18,8 @@ export default function App() {
       <Route path="/analyze" element={<Analyze />} />
       <Route path="/model-insights" element={<ModelInsights />} />
       <Route path="/eda" element={<Eda />} />
+      <Route path="/spam" element={<Spam />} />
+      <Route path="/dataset" element={<Dataset />} />
       <Route path="/inbox" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -43,3 +43,10 @@ The seeded email set, overview totals, analytics, and model evaluation metrics a
 - Inbox page and Analytics page deleted (`/inbox` now redirects to `/dashboard`; unknown routes → `/`). EmailTable component removed. Email detail lives at `/inbox/:id`, opened from the dashboard "Recent analysis" table; its back link goes to the overview.
 - Sidebar nav is now Overview / Analyze email / Model insights. Top bar keeps only the breadcrumb — global search box, notifications bell, help icon and theme toggle removed (Ctrl+K palette still works).
 - First page `/` shows only the MailMind AI name and a Start button.
+
+## Spam & Security (/spam) — added
+- `GET /api/security` → totals (spam/suspicious/phishing_risk/legitimate/needs_review), 2D threat matrix (spam score × phishing risk, clickable quadrant filters the table), security-indicator frequency with expandable explanations, and the flagged-email table (Review links to /inbox/:id).
+
+## Dataset Explorer (/dataset) — added
+- `GET /api/dataset` → record counts, class split, data-quality checks (missing fields, duplicates), unique senders, descriptive feature statistics (body/subject length, URL count, special chars, spam probability) and a 50-row preview filterable by Spam/Ham label.
+- All figures are computed from the real `emails` collection; labels come from stored verdicts (noted in the UI), not hand annotation.
