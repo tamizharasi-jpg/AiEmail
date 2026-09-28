@@ -23,6 +23,7 @@ export interface EmailRecord {
   key_information: string[];
   entities: string[];
   generated_response: string | null;
+  reply_source: "ollama" | "builtin" | null;
   is_simulated: boolean;
   created_at: string;
 }
@@ -87,4 +88,9 @@ export interface ModelInsightsResponse {
 
 export interface AnalyzeResponse {
   email: EmailRecord;
+}
+export interface AiStatusResponse {
+  online: boolean;
+  model: string | null;
+  message: string;
 }

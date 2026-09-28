@@ -1,9 +1,9 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { LockKeyhole, Play, RotateCcw, Sparkles, UploadCloud } from "lucide-react";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiPost } from "@/lib/api";
-import type { AnalyzeResponse } from "@/types/mailmind";
+import { apiGet, apiPost } from "@/lib/api";
+import type { AiStatusResponse, AnalyzeResponse } from "@/types/mailmind";
 import AppShell from "@/components/layout/AppShell";
 
 export default function Analyze() {
@@ -17,6 +17,7 @@ export default function Analyze() {
     mutationFn: () => apiPost<AnalyzeResponse>("/analysis", { sender: sender || "Unknown sender", subject, body }),
     onSuccess: (result) => navigate(`/inbox/${result.email.id}`),
   });
+  const aiStatus = useQuery({ queryKey: ["ai-status"], queryFn: () => apiGet<AiStatusResponse>("/ai-status") });
   const canAnalyze = subject.trim().length > 2 && body.trim().length > 8;
 
   const readFile = async (file: File) => {
@@ -29,7 +30,7 @@ export default function Analyze() {
   return <AppShell><div className="page-stack" data-testid="analyze-page">
     <div className="page-heading compact">
       <div><div className="eyebrow"><Sparkles size={12} /> New analysis</div><h1>Let AI understand your email.</h1><p>Paste an email or drop a file, and MailMind will explain what it is and what to do next.</p></div>
-      <div className="privacy-note"><LockKeyhole size={14} /> Private by design</div>
+      <div className="privacy-note" data-testid="ai-status-chip"><LockKeyhole size={14} /> {aiStatus.data?.message ?? "Checking reply engine..."}</div>
     </div>
     <div className="analyze-layout single">
       <section className="paste-panel panel" data-testid="paste-email-panel">

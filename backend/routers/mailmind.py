@@ -7,7 +7,9 @@ import uuid
 from fastapi import APIRouter, HTTPException, Query
 
 from lib.db import db
+from lib import ollama
 from models.mailmind import (
+    AiStatusResponse,
     AnalyzeEmailRequest,
     AnalyzeEmailResponse,
     AnalyticsResponse,
@@ -188,10 +190,20 @@ async def analyze_email(payload: AnalyzeEmailRequest) -> AnalyzeEmailResponse:
         ),
         key_information=[f"Warning sign: {term}" for term in risk_terms] or ["No warning signs detected"],
         entities=[part for part in [payload.sender, payload.subject[:40]] if part],
-        generated_response=None if suspicious else build_reply(payload.sender, payload.subject, payload.body),
+        generated_response=None,
     )
+    if not suspicious:
+        llm_reply = await ollama.generate_reply(record.sender, payload.subject, payload.body)
+        record.generated_response = llm_reply or build_reply(payload.sender, payload.subject, payload.body)
+        record.reply_source = "ollama" if llm_reply else "builtin"
     await db.emails.insert_one(record.model_dump())
     return AnalyzeEmailResponse(email=record)
+
+
+@router.get("/ai-status", response_model=AiStatusResponse)
+async def ai_status() -> AiStatusResponse:
+    online, message = await ollama.check_status()
+    return AiStatusResponse(online=online, model=ollama.ollama_model() if ollama.is_configured() else None, message=message)
 
 
 @router.get("/analytics", response_model=AnalyticsResponse)

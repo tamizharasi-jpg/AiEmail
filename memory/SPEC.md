@@ -24,3 +24,9 @@ The seeded email set, overview totals, analytics, and model evaluation metrics a
 - First page `/` = minimal splash (MailMind AI + tagline + Start → /dashboard). Topbar has no user name/avatar.
 - Analyze page: paste form + .eml/.txt drop (Ctrl+Enter submits). Analysis pipeline animation, explainable-AI/SHAP factor panel and model jargon removed from the user-facing flow. Model Insights keeps simulated evaluation metrics.
 - Replies: `build_reply()` in backend/routers/mailmind.py drafts a rule-based reply from the sender name, subject and body intent (meeting / interview / invoice / review / question) and echoes any deadline. Suspicious/spam emails get `generated_response = null` and the UI shows a "no reply suggested" notice.
+
+## Ollama reply engine (optional)
+- `backend/lib/ollama.py` calls a user-supplied Ollama server: `POST {OLLAMA_URL}/api/generate` (stream=false, timeouts 4/24/4s) for legitimate emails; on any failure/unset URL it falls back to `build_reply()`.
+- Env: `OLLAMA_URL` (tunnel root, no path — empty = disabled), `OLLAMA_MODEL` (default llama3.2:3b) in backend/.env; restart backend after changing.
+- `GET /api/ai-status` reports online/model/message (checks `/api/tags` and that the model is pulled); shown as a chip on the Analyze page. `EmailRecord.reply_source` = "ollama" | "builtin" and the detail panel labels LLM-written drafts.
+- Spam/suspicious emails never get a reply generated (no LLM call either).

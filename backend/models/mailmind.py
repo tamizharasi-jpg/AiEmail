@@ -31,6 +31,7 @@ class EmailRecord(BaseModel):
     key_information: list[str]
     entities: list[str]
     generated_response: str | None = None
+    reply_source: Literal["ollama", "builtin"] | None = None
     is_simulated: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -98,6 +99,12 @@ class AnalyzeEmailRequest(BaseModel):
     recipients: str = ""
     subject: str
     body: str
+
+
+class AiStatusResponse(BaseModel):
+    online: bool
+    model: str | None
+    message: str
 
 
 class AnalyzeEmailResponse(BaseModel):

@@ -74,7 +74,7 @@ export default function EmailDetail() {
         </div>
 
         <div className="response-box" data-testid="response-box">
-          <div className="response-heading"><div><MessageSquareText size={15} /><strong>Suggested reply</strong></div>{reply && !risky && <span>Draft</span>}</div>
+          <div className="response-heading"><div><MessageSquareText size={15} /><strong>Suggested reply</strong></div>{reply && !risky && <span data-testid="reply-source">{data.reply_source === "ollama" ? "Written by local LLM" : "Draft"}</span>}</div>
           {risky || !reply
             ? <p data-testid="no-reply-notice">This email looks unsafe, so no reply is suggested. Verify the sender through a channel you trust before responding.</p>
             : <div className="draft">
