@@ -9,7 +9,6 @@ export default function Landing() {
     <motion.div className="landing-core" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
       <div className="landing-logo"><Sparkles size={18} /><span>MAILMIND <b>AI</b></span></div>
       <h1>MailMind AI</h1>
-      <p className="landing-tagline">Understand your emails. Prioritize what matters. Respond intelligently.</p>
       <button className="start-button" onClick={() => navigate("/dashboard")} data-testid="landing-start-button">Start <ArrowRight size={16} /></button>
     </motion.div>
     <div className="landing-footer">AI EMAIL INTELLIGENCE</div>

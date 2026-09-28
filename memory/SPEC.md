@@ -30,3 +30,8 @@ The seeded email set, overview totals, analytics, and model evaluation metrics a
 - Env: `OLLAMA_URL` (tunnel root, no path — empty = disabled), `OLLAMA_MODEL` (default llama3.2:3b) in backend/.env; restart backend after changing.
 - `GET /api/ai-status` reports online/model/message (checks `/api/tags` and that the model is pulled); shown as a chip on the Analyze page. `EmailRecord.reply_source` = "ollama" | "builtin" and the detail panel labels LLM-written drafts.
 - Spam/suspicious emails never get a reply generated (no LLM call either).
+
+## Removals (user request)
+- Inbox page and Analytics page deleted (`/inbox` now redirects to `/dashboard`; unknown routes → `/`). EmailTable component removed. Email detail lives at `/inbox/:id`, opened from the dashboard "Recent analysis" table; its back link goes to the overview.
+- Sidebar nav is now Overview / Analyze email / Model insights. Top bar keeps only the breadcrumb — global search box, notifications bell, help icon and theme toggle removed (Ctrl+K palette still works).
+- First page `/` shows only the MailMind AI name and a Start button.

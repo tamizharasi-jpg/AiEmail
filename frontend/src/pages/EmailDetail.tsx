@@ -18,14 +18,14 @@ export default function EmailDetail() {
   });
 
   if (isLoading) return <AppShell><div className="page-stack" data-testid="email-detail-loading"><div className="skeleton large" /><div className="skeleton" /></div></AppShell>;
-  if (isError || !data) return <AppShell><div className="empty-state page-empty" data-testid="email-detail-error"><ShieldAlert size={24} /><strong>Email not found</strong><Link to="/inbox" className="button-secondary">Back to inbox</Link></div></AppShell>;
+  if (isError || !data) return <AppShell><div className="empty-state page-empty" data-testid="email-detail-error"><ShieldAlert size={24} /><strong>Email not found</strong><Link to="/dashboard" className="button-secondary">Back to overview</Link></div></AppShell>;
 
   const risky = data.spam_status !== "Legitimate";
   const reply = data.generated_response;
 
   return <AppShell><div className="page-stack" data-testid="email-detail-page">
     <div className="detail-top">
-      <Link to="/inbox" className="back-link" data-testid="email-detail-back"><ArrowLeft size={15} /> Back to inbox</Link>
+      <Link to="/dashboard" className="back-link" data-testid="email-detail-back"><ArrowLeft size={15} /> Back to overview</Link>
     </div>
     <div className="detail-layout">
       <article className="email-reader panel" data-testid="email-reader">
