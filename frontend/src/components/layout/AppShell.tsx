@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Bell, ChevronDown, Command, HelpCircle, Inbox, LayoutDashboard, LineChart, MailPlus, Menu, Moon, PanelLeftClose, PanelLeftOpen, Search, ShieldAlert, Sparkles, Sun, Waypoints, X } from "lucide-react";
+import { Bell, Command, HelpCircle, Inbox, LayoutDashboard, LineChart, MailPlus, Moon, PanelLeftClose, PanelLeftOpen, Search, ShieldAlert, Sparkles, Sun, Waypoints, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface AppShellProps {
@@ -58,7 +58,6 @@ export default function AppShell({ children }: AppShellProps) {
             <NavLink key={to} to={to} className={({ isActive }) => `sidebar-link ${isActive ? "active" : ""}`} data-testid={`nav-${label.toLowerCase().replaceAll(" ", "-")}`} title={collapsed ? label : undefined}>
               <Icon size={17} strokeWidth={1.8} />
               {!collapsed && <span>{label}</span>}
-              {!collapsed && label === "Inbox" && <span className="nav-count">2.4k</span>}
             </NavLink>
           ))}
         </nav>
@@ -81,7 +80,7 @@ export default function AppShell({ children }: AppShellProps) {
             <button className="icon-button" data-testid="notifications-button" aria-label="Notifications"><Bell size={17} /><span className="notification-dot" /></button>
             <button className="icon-button" data-testid="help-button" aria-label="Help"><HelpCircle size={17} /></button>
             <button className="icon-button" onClick={() => setDark((value) => !value)} data-testid="theme-toggle-button" aria-label="Toggle theme">{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
-            <div className="user-chip" data-testid="user-menu"><div className="avatar">AM</div><span>Alex Morgan</span><ChevronDown size={14} /></div>
+            
           </div>
         </header>
         <main className="main-content">{children}</main>

@@ -19,3 +19,8 @@ The seeded email set, overview totals, analytics, and model evaluation metrics a
 
 ## Routes
 `/`, `/dashboard`, `/inbox`, `/inbox/:id`, `/analyze`, `/analytics`, `/model-insights`.
+## Update — simplification pass
+- No auth, no seeded demo emails: inbox/dashboard/analytics are computed from emails the user analyzes (`/api/overview`, `/api/emails`, `/api/analytics` aggregate real DB docs).
+- First page `/` = minimal splash (MailMind AI + tagline + Start → /dashboard). Topbar has no user name/avatar.
+- Analyze page: paste form + .eml/.txt drop (Ctrl+Enter submits). Analysis pipeline animation, explainable-AI/SHAP factor panel and model jargon removed from the user-facing flow. Model Insights keeps simulated evaluation metrics.
+- Replies: `build_reply()` in backend/routers/mailmind.py drafts a rule-based reply from the sender name, subject and body intent (meeting / interview / invoice / review / question) and echoes any deadline. Suspicious/spam emails get `generated_response = null` and the UI shows a "no reply suggested" notice.

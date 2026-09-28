@@ -1,12 +1,13 @@
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Annotated
+import re
 import uuid
 
 from fastapi import APIRouter, HTTPException, Query
 
 from lib.db import db
 from models.mailmind import (
-    AnalysisStage,
     AnalyzeEmailRequest,
     AnalyzeEmailResponse,
     AnalyticsResponse,
@@ -20,144 +21,47 @@ from models.mailmind import (
 
 router = APIRouter()
 
-
-DEMO_EMAILS = [
-    {
-        "id": "demo-rahul-project-review",
-        "sender": "Rahul Sharma",
-        "sender_email": "rahul@northstar.dev",
-        "subject": "Project Review Meeting",
-        "preview": "Can we align on the evaluation plan before Thursday?",
-        "body": "Hi team,\n\nCan we align on the evaluation plan before Thursday? I have attached the latest experiment notes and would like your review on the error analysis section.\n\nBest,\nRahul",
-        "category": "Work",
-        "priority": "High",
-        "spam_status": "Legitimate",
-        "spam_probability": 3,
-        "phishing_risk": "Low",
-        "confidence": 92,
-        "date": "2025-05-14",
-        "action_required": True,
-        "intent": "Request for review",
-        "summary": "Rahul is asking for feedback on the evaluation plan and error analysis before Thursday.",
-        "key_information": ["Review requested", "Deadline: Thursday", "Experiment notes attached"],
-        "entities": ["Evaluation plan", "Error analysis", "Thursday"],
-        "influencing_factors": [{"label": "Known work domain", "impact": 82, "direction": "trust"}, {"label": "Clear meeting context", "impact": 65, "direction": "trust"}, {"label": "Attachment present", "impact": 18, "direction": "risk"}],
-    },
-    {
-        "id": "demo-maya-interview",
-        "sender": "Maya Patel",
-        "sender_email": "maya@talentloop.co",
-        "subject": "Next steps: Data Science interview",
-        "preview": "We enjoyed meeting you and would like to schedule the next round.",
-        "body": "Hello,\n\nWe enjoyed meeting you and would like to schedule the next round of your Data Science interview. Please choose a slot from the calendar link below.\n\nRegards,\nMaya",
-        "category": "Career",
-        "priority": "High",
-        "spam_status": "Legitimate",
-        "spam_probability": 4,
-        "phishing_risk": "Low",
-        "confidence": 95,
-        "date": "2025-05-13",
-        "action_required": True,
-        "intent": "Scheduling request",
-        "summary": "A recruiter is inviting you to schedule the next round of a Data Science interview.",
-        "key_information": ["Interview next round", "Calendar link included", "Reply recommended"],
-        "entities": ["Data Science", "Next round", "Calendar"],
-        "influencing_factors": [{"label": "Consistent sender domain", "impact": 79, "direction": "trust"}, {"label": "Professional language", "impact": 71, "direction": "trust"}, {"label": "External link", "impact": 22, "direction": "risk"}],
-    },
-    {
-        "id": "demo-bank-statement",
-        "sender": "Axis Bank",
-        "sender_email": "statements@axisbank.example",
-        "subject": "Your monthly statement is ready",
-        "preview": "Your April account statement is now available in online banking.",
-        "body": "Your monthly statement for April is available in online banking. Sign in through the official app to view it. This message does not contain a sign-in link.",
-        "category": "Finance",
-        "priority": "Medium",
-        "spam_status": "Legitimate",
-        "spam_probability": 6,
-        "phishing_risk": "Low",
-        "confidence": 89,
-        "date": "2025-05-12",
-        "action_required": False,
-        "intent": "Account notification",
-        "summary": "A monthly bank statement notification is available through the official banking app.",
-        "key_information": ["April statement", "No sign-in link", "Review when convenient"],
-        "entities": ["April", "Online banking"],
-        "influencing_factors": [{"label": "Known finance pattern", "impact": 76, "direction": "trust"}, {"label": "No credential request", "impact": 64, "direction": "trust"}, {"label": "Financial context", "impact": 19, "direction": "risk"}],
-    },
-    {
-        "id": "demo-vendor-urgent",
-        "sender": "Accounts Payable",
-        "sender_email": "billing@vendor-notice.example",
-        "subject": "Urgent: invoice payment details changed",
-        "preview": "Please update the beneficiary account before the next payment run.",
-        "body": "Urgent request: our beneficiary account has changed. Please update payment details before the next payment run. Reply with confirmation once complete.",
-        "category": "Finance",
-        "priority": "Critical",
-        "spam_status": "Suspicious",
-        "spam_probability": 73,
-        "phishing_risk": "High",
-        "confidence": 87,
-        "date": "2025-05-11",
-        "action_required": True,
-        "intent": "Payment change request",
-        "summary": "The sender asks for a banking change under urgent time pressure; verify through a known channel.",
-        "key_information": ["Beneficiary change", "Urgent language", "Do not reply with confirmation"],
-        "entities": ["Payment run", "Beneficiary account"],
-        "influencing_factors": [{"label": "Urgency indicators", "impact": 82, "direction": "risk"}, {"label": "Financial request", "impact": 76, "direction": "risk"}, {"label": "Domain mismatch", "impact": 69, "direction": "risk"}],
-    },
-    {
-        "id": "demo-newsletter",
-        "sender": "Product Weekly",
-        "sender_email": "hello@productweekly.example",
-        "subject": "The field guide to better product experiments",
-        "preview": "Five practical ways to turn research into sharper product decisions.",
-        "body": "This week's field guide covers practical ways to turn research into sharper product decisions. Read the latest edition when you have a moment.",
-        "category": "Education",
-        "priority": "Low",
-        "spam_status": "Legitimate",
-        "spam_probability": 11,
-        "phishing_risk": "Low",
-        "confidence": 90,
-        "date": "2025-05-09",
-        "action_required": False,
-        "intent": "Newsletter",
-        "summary": "A product research newsletter with practical guidance on product experiments.",
-        "key_information": ["Weekly edition", "No action required", "Optional reading"],
-        "entities": ["Product experiments", "Research"],
-        "influencing_factors": [{"label": "Expected newsletter pattern", "impact": 72, "direction": "trust"}, {"label": "Low urgency", "impact": 44, "direction": "trust"}, {"label": "Promotional language", "impact": 28, "direction": "risk"}],
-    },
-    {
-        "id": "demo-credential-risk",
-        "sender": "Security Desk",
-        "sender_email": "security-alert@verify-account.example",
-        "subject": "Action required: verify your mailbox",
-        "preview": "Your account will be suspended unless you verify within 24 hours.",
-        "body": "Your account will be suspended unless you verify within 24 hours. Use the secure portal below and enter your password to restore access.",
-        "category": "Personal",
-        "priority": "Critical",
-        "spam_status": "Suspicious",
-        "spam_probability": 94,
-        "phishing_risk": "High",
-        "confidence": 96,
-        "date": "2025-05-08",
-        "action_required": True,
-        "intent": "Credential harvesting",
-        "summary": "This message uses account suspension pressure and requests credentials through an unverified domain.",
-        "key_information": ["24-hour threat", "Password request", "Do not use the link"],
-        "entities": ["Mailbox", "24 hours", "Secure portal"],
-        "influencing_factors": [{"label": "Credential request", "impact": 91, "direction": "risk"}, {"label": "Urgency indicators", "impact": 86, "direction": "risk"}, {"label": "External domain", "impact": 77, "direction": "risk"}],
-    },
-]
+PRIORITY_ORDER = ["Critical", "High", "Medium", "Low", "Informational"]
+CATEGORY_ORDER = ["Work", "Finance", "Career", "Education", "Personal", "Shopping", "Travel"]
 
 
-async def ensure_demo_emails() -> None:
-    if await db.emails.count_documents({}) == 0:
-        await db.emails.insert_many(DEMO_EMAILS)
+def _first_name(sender: str) -> str:
+    cleaned = re.split(r"[<@]", sender.strip())[0].strip()
+    cleaned = re.sub(r"[._-]+", " ", cleaned).strip()
+    first = cleaned.split(" ")[0] if cleaned else ""
+    return first.capitalize() if first and first.isalpha() else ""
+
+
+def build_reply(sender: str, subject: str, body: str) -> str:
+    """Rule-based reply drafted from the actual subject and body of the email."""
+    text = f"{subject} {body}".lower()
+    greeting = f"Hi {_first_name(sender)}," if _first_name(sender) else "Hello,"
+    topic = subject.strip() or "your message"
+
+    lines: list[str] = [greeting, ""]
+    if any(word in text for word in ["meeting", "schedule", "call", "calendar", "slot", "availability"]):
+        lines.append(f"Thanks for reaching out about \"{topic}\". A meeting works for me — I'm generally free in the mornings, so feel free to pick a slot that suits you and I'll confirm.")
+    elif any(word in text for word in ["interview", "position", "role", "offer", "application"]):
+        lines.append(f"Thank you for the update on \"{topic}\". I'm very interested in moving forward and am happy to fit around your schedule for the next step.")
+    elif any(word in text for word in ["invoice", "payment", "statement", "billing", "refund"]):
+        lines.append(f"Thanks for sending this through regarding \"{topic}\". I'll review the details on my side and come back to you with confirmation once everything checks out.")
+    elif any(word in text for word in ["review", "feedback", "document", "report", "draft", "attached"]):
+        lines.append(f"Thanks for sharing this. I've noted your request on \"{topic}\" and will go through the material and send you my comments shortly.")
+    elif any(word in text for word in ["question", "could you", "can you", "please confirm", "let me know", "?"]):
+        lines.append(f"Thanks for your question about \"{topic}\". Let me check the details and I'll get back to you with a clear answer.")
+    else:
+        lines.append(f"Thanks for your email about \"{topic}\". I've read it and will follow up with the next steps.")
+
+    deadline = re.search(r"\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|this week|next week|by \w+day)\b", text)
+    if deadline:
+        lines.append("")
+        lines.append(f"I've noted the timing you mentioned ({deadline.group(1)}) and will keep to it.")
+
+    lines.extend(["", "Best regards"])
+    return "\n".join(lines)
 
 
 async def get_email_or_404(email_id: str) -> EmailRecord:
-    await ensure_demo_emails()
     doc = await db.emails.find_one({"id": email_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Email analysis not found")
@@ -166,22 +70,42 @@ async def get_email_or_404(email_id: str) -> EmailRecord:
 
 @router.get("/overview", response_model=OverviewResponse)
 async def get_overview() -> OverviewResponse:
-    await ensure_demo_emails()
-    recent_docs = await db.emails.find().sort("date", -1).limit(6).to_list(6)
+    docs = await db.emails.find().sort("date", -1).to_list(1000)
+    emails = [EmailRecord(**doc) for doc in docs]
+    total = len(emails)
+    spam = sum(1 for e in emails if e.spam_status in ("Spam", "Suspicious"))
+    high = sum(1 for e in emails if e.priority in ("Critical", "High"))
+    action = sum(1 for e in emails if e.action_required)
+    phishing = sum(1 for e in emails if e.phishing_risk == "High")
+    spam_rate = round((spam / total) * 100, 1) if total else 0.0
+    health = max(0, 100 - round(spam_rate) - min(20, high * 2)) if total else 100
+
+    by_date = Counter(e.date for e in emails)
+    volume_trend = [{"label": label, "value": value} for label, value in sorted(by_date.items())][-7:]
+    priorities = Counter(e.priority for e in emails)
+    categories = Counter(e.category for e in emails)
+
+    breakdown = ["No emails analyzed yet"] if not total else [
+        f"{total} email{'s' if total != 1 else ''} analyzed",
+        f"{action} need a response",
+        f"{spam} flagged as spam or suspicious",
+        f"{high} high priority",
+    ]
+
     return OverviewResponse(
-        emails_analyzed=2430,
-        month_change=12.4,
-        spam_detected=324,
-        spam_rate=13.3,
-        high_priority=187,
-        action_required=421,
-        phishing_risk=42,
-        inbox_health=78,
-        health_breakdown=["Low clutter", "Good response coverage", "Moderate spam", "12 urgent emails"],
-        volume_trend=[{"label": "May 08", "value": 290}, {"label": "May 09", "value": 348}, {"label": "May 10", "value": 312}, {"label": "May 11", "value": 401}, {"label": "May 12", "value": 377}, {"label": "May 13", "value": 442}, {"label": "May 14", "value": 435}],
-        priority_distribution=[{"label": "Critical", "value": 42}, {"label": "High", "value": 187}, {"label": "Medium", "value": 612}, {"label": "Low", "value": 1008}, {"label": "Informational", "value": 581}],
-        category_distribution=[{"label": "Work", "value": 734}, {"label": "Personal", "value": 405}, {"label": "Finance", "value": 328}, {"label": "Career", "value": 218}, {"label": "Education", "value": 247}, {"label": "Shopping", "value": 206}, {"label": "Travel", "value": 142}, {"label": "Other", "value": 150}],
-        recent_analysis=[EmailRecord(**doc) for doc in recent_docs],
+        emails_analyzed=total,
+        month_change=0.0,
+        spam_detected=spam,
+        spam_rate=spam_rate,
+        high_priority=high,
+        action_required=action,
+        phishing_risk=phishing,
+        inbox_health=health,
+        health_breakdown=breakdown,
+        volume_trend=volume_trend,
+        priority_distribution=[{"label": name, "value": priorities.get(name, 0)} for name in PRIORITY_ORDER],
+        category_distribution=[{"label": name, "value": categories.get(name, 0)} for name in CATEGORY_ORDER],
+        recent_analysis=emails[:6],
     )
 
 
@@ -192,10 +116,13 @@ async def list_emails(
     page: int = 1,
     page_size: int = 20,
 ) -> EmailListResponse:
-    await ensure_demo_emails()
     query: dict = {}
     if search:
-        query["$or"] = [{"sender": {"$regex": search, "$options": "i"}}, {"subject": {"$regex": search, "$options": "i"}}, {"preview": {"$regex": search, "$options": "i"}}]
+        query["$or"] = [
+            {"sender": {"$regex": search, "$options": "i"}},
+            {"subject": {"$regex": search, "$options": "i"}},
+            {"preview": {"$regex": search, "$options": "i"}},
+        ]
     if filter_name == "priority":
         query["priority"] = {"$in": ["Critical", "High"]}
     elif filter_name == "action":
@@ -214,59 +141,91 @@ async def get_email(email_id: str) -> EmailRecord:
     return await get_email_or_404(email_id)
 
 
+@router.delete("/emails/{email_id}", response_model=FeedbackResponse)
+async def delete_email(email_id: str) -> FeedbackResponse:
+    result = await db.emails.delete_one({"id": email_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Email analysis not found")
+    return FeedbackResponse(id=email_id, message="Email removed")
+
+
 @router.post("/analysis", response_model=AnalyzeEmailResponse)
 async def analyze_email(payload: AnalyzeEmailRequest) -> AnalyzeEmailResponse:
     subject_lower = payload.subject.lower()
     body_lower = payload.body.lower()
-    risk_terms = [term for term in ["urgent", "password", "verify", "payment", "suspended", "beneficiary"] if term in f"{subject_lower} {body_lower}"]
+    joined = f"{subject_lower} {body_lower}"
+    risk_terms = [term for term in ["urgent", "password", "verify", "click here", "suspended", "beneficiary", "lottery", "winner", "bitcoin", "gift card"] if term in joined]
     suspicious = len(risk_terms) >= 2
-    category = "Finance" if any(term in body_lower for term in ["payment", "invoice", "bank", "statement"]) else "Work"
-    priority = "Critical" if suspicious and any(term in body_lower for term in ["password", "suspended", "verify"]) else ("High" if "urgent" in subject_lower else "Medium")
+    if any(term in body_lower for term in ["payment", "invoice", "bank", "statement", "billing"]):
+        category = "Finance"
+    elif any(term in joined for term in ["interview", "resume", "position", "application", "hiring"]):
+        category = "Career"
+    elif any(term in joined for term in ["course", "lecture", "assignment", "exam", "study"]):
+        category = "Education"
+    else:
+        category = "Work"
+    priority = "Critical" if suspicious else ("High" if any(term in joined for term in ["urgent", "asap", "today", "deadline", "tomorrow"]) else "Medium")
+
     record = EmailRecord(
-        sender=payload.sender,
-        sender_email=payload.sender or "unknown@example.local",
+        sender=re.sub(r"\s*<[^>]*>", "", payload.sender).strip() or payload.sender,
+        sender_email=(re.search(r"[\w.+-]+@[\w.-]+", payload.sender).group(0) if re.search(r"[\w.+-]+@[\w.-]+", payload.sender) else "unknown@example.local"),
         subject=payload.subject,
         preview=payload.body[:120],
         body=payload.body,
         category=category,
         priority=priority,
         spam_status="Suspicious" if suspicious else "Legitimate",
-        spam_probability=min(96, 18 + len(risk_terms) * 19),
+        spam_probability=min(96, 8 + len(risk_terms) * 22),
         phishing_risk="High" if suspicious else "Low",
-        confidence=83 if suspicious else 79,
+        confidence=88 if suspicious else 82,
         date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-        action_required=True,
+        action_required=not suspicious,
         intent="Potentially risky request" if suspicious else "General correspondence",
-        summary="The demo model flagged risk indicators that warrant verification before acting." if suspicious else "The demo model found a routine message that may need a response.",
-        key_information=["Human review recommended", *([f"Risk term: {term}" for term in risk_terms] if risk_terms else ["No high-risk terms detected"])],
-        entities=[payload.sender, payload.subject[:40]],
-        influencing_factors=[{"label": "Risk language", "impact": min(92, 35 + len(risk_terms) * 15), "direction": "risk" if suspicious else "trust"}, {"label": "Message context", "impact": 54, "direction": "trust"}],
+        summary=(
+            "This message shows warning signs such as urgency and credential or payment pressure. Verify the sender before acting."
+            if suspicious
+            else f"A {category.lower()} email about \"{payload.subject.strip() or 'your message'}\" that looks safe and may need a reply."
+        ),
+        key_information=[f"Warning sign: {term}" for term in risk_terms] or ["No warning signs detected"],
+        entities=[part for part in [payload.sender, payload.subject[:40]] if part],
+        generated_response=None if suspicious else build_reply(payload.sender, payload.subject, payload.body),
     )
     await db.emails.insert_one(record.model_dump())
-    stages = [
-        AnalysisStage(name="Ingesting", detail="Email parsed", status="complete"),
-        AnalysisStage(name="Cleaning", detail="Text normalized", status="complete"),
-        AnalysisStage(name="NLP processing", detail="42 language features extracted", status="complete"),
-        AnalysisStage(name="Feature engineering", detail="Signals prepared", status="complete"),
-        AnalysisStage(name="ML classification", detail="Category and spam models evaluated", status="complete"),
-        AnalysisStage(name="Explainability", detail="Influencing factors prepared", status="complete"),
-        AnalysisStage(name="Complete", detail="Human review remains recommended", status="active"),
-    ]
-    response = "Do not act on this email until the sender and request are verified through a known channel." if suspicious else "Hi,\n\nThanks for reaching out. I’ve reviewed your message and will follow up shortly with the next steps.\n\nBest,\nAlex"
-    return AnalyzeEmailResponse(email=record, stages=stages, generated_response=response)
+    return AnalyzeEmailResponse(email=record)
 
 
 @router.get("/analytics", response_model=AnalyticsResponse)
 async def get_analytics(period: str = "30d") -> AnalyticsResponse:
     if period not in {"7d", "30d", "90d", "all"}:
         period = "30d"
-    points = {
-        "7d": [42, 51, 47, 62, 58, 71, 68],
-        "30d": [39, 47, 44, 58, 52, 61, 68, 64, 73, 77, 81, 86],
-        "90d": [31, 38, 42, 46, 51, 58, 62, 68, 73, 79, 84, 91],
-        "all": [18, 29, 34, 42, 49, 58, 66, 74, 81, 91, 103, 112],
-    }[period]
-    return AnalyticsResponse(period=period, volume=[{"label": f"W{i + 1}", "analyzed": value, "spam": round(value * 0.13), "priority": round(value * 0.09)} for i, value in enumerate(points)], confidence_distribution=[{"label": "90–100%", "value": 61}, {"label": "75–89%", "value": 27}, {"label": "50–74%", "value": 9}, {"label": "Below 50%", "value": 3}], response_rate=68, low_confidence=73, corrections=18)
+    docs = await db.emails.find().sort("date", 1).to_list(1000)
+    emails = [EmailRecord(**doc) for doc in docs]
+    limit = {"7d": 7, "30d": 30, "90d": 90, "all": 365}[period]
+    by_date: dict[str, list[EmailRecord]] = {}
+    for email in emails:
+        by_date.setdefault(email.date, []).append(email)
+    volume = [
+        {
+            "label": date,
+            "analyzed": len(items),
+            "spam": sum(1 for e in items if e.spam_status in ("Spam", "Suspicious")),
+            "priority": sum(1 for e in items if e.priority in ("Critical", "High")),
+        }
+        for date, items in sorted(by_date.items())
+    ][-limit:]
+    buckets = {"90–100%": 0, "75–89%": 0, "50–74%": 0, "Below 50%": 0}
+    for email in emails:
+        key = "90–100%" if email.confidence >= 90 else "75–89%" if email.confidence >= 75 else "50–74%" if email.confidence >= 50 else "Below 50%"
+        buckets[key] += 1
+    action = sum(1 for e in emails if e.action_required)
+    return AnalyticsResponse(
+        period=period,
+        volume=volume,
+        confidence_distribution=[{"label": label, "value": value} for label, value in buckets.items()],
+        response_rate=round((action / len(emails)) * 100) if emails else 0,
+        low_confidence=sum(1 for e in emails if e.confidence < 75),
+        corrections=await db.feedback.count_documents({"is_correct": False}),
+    )
 
 
 @router.get("/model-insights", response_model=ModelInsightsResponse)
@@ -278,10 +237,22 @@ async def get_model_insights() -> ModelInsightsResponse:
         missing_values=0,
         duplicate_records=12,
         average_email_length=486,
-        metrics=[{"name": "Naive Bayes", "accuracy": 0.91, "precision": 0.89, "recall": 0.86, "f1": 0.87, "roc_auc": 0.93}, {"name": "Logistic Regression", "accuracy": 0.94, "precision": 0.92, "recall": 0.90, "f1": 0.91, "roc_auc": 0.96}, {"name": "Random Forest", "accuracy": 0.93, "precision": 0.91, "recall": 0.88, "f1": 0.89, "roc_auc": 0.95}, {"name": "Linear SVM", "accuracy": 0.95, "precision": 0.94, "recall": 0.91, "f1": 0.92, "roc_auc": 0.97}],
+        metrics=[
+            {"name": "Naive Bayes", "accuracy": 0.91, "precision": 0.89, "recall": 0.86, "f1": 0.87, "roc_auc": 0.93},
+            {"name": "Logistic Regression", "accuracy": 0.94, "precision": 0.92, "recall": 0.90, "f1": 0.91, "roc_auc": 0.96},
+            {"name": "Random Forest", "accuracy": 0.93, "precision": 0.91, "recall": 0.88, "f1": 0.89, "roc_auc": 0.95},
+            {"name": "Linear SVM", "accuracy": 0.95, "precision": 0.94, "recall": 0.91, "f1": 0.92, "roc_auc": 0.97},
+        ],
         confusion_matrix=[[876, 42], [71, 251]],
-        feature_importance=[{"label": "TF-IDF tokens", "value": 88}, {"label": "URL count", "value": 76}, {"label": "Sender domain signal", "value": 71}, {"label": "Credential language", "value": 68}, {"label": "HTML ratio", "value": 44}, {"label": "Email length", "value": 31}],
-        pipeline=[{"name": "Raw email", "detail": "Input text and metadata"}, {"name": "Cleaning", "detail": "Normalize and strip noise"}, {"name": "NLP", "detail": "Tokenize and embed language"}, {"name": "Features", "detail": "Build model signals"}, {"name": "Classifiers", "detail": "Spam, category and priority"}, {"name": "Explainability", "detail": "Surface influencing factors"}],
+        feature_importance=[
+            {"label": "TF-IDF tokens", "value": 88},
+            {"label": "URL count", "value": 76},
+            {"label": "Sender domain signal", "value": 71},
+            {"label": "Credential language", "value": 68},
+            {"label": "HTML ratio", "value": 44},
+            {"label": "Email length", "value": 31},
+        ],
+        pipeline=[],
     )
 
 
@@ -289,4 +260,4 @@ async def get_model_insights() -> ModelInsightsResponse:
 async def create_feedback(payload: FeedbackCreate) -> FeedbackResponse:
     feedback_id = str(uuid.uuid4())
     await db.feedback.insert_one({**payload.model_dump(), "id": feedback_id, "created_at": datetime.now(timezone.utc)})
-    return FeedbackResponse(id=feedback_id, message="Feedback recorded for the demo model.")
+    return FeedbackResponse(id=feedback_id, message="Thanks — your feedback was saved.")

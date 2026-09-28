@@ -10,12 +10,6 @@ Priority = Literal["Critical", "High", "Medium", "Low", "Informational"]
 SpamStatus = Literal["Legitimate", "Spam", "Suspicious"]
 
 
-class ModelFactor(BaseModel):
-    label: str
-    impact: int
-    direction: Literal["risk", "trust"]
-
-
 class EmailRecord(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     sender: str
@@ -36,7 +30,7 @@ class EmailRecord(BaseModel):
     summary: str
     key_information: list[str]
     entities: list[str]
-    influencing_factors: list[ModelFactor]
+    generated_response: str | None = None
     is_simulated: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -106,17 +100,8 @@ class AnalyzeEmailRequest(BaseModel):
     body: str
 
 
-class AnalysisStage(BaseModel):
-    name: str
-    detail: str
-    status: Literal["complete", "active"]
-
-
 class AnalyzeEmailResponse(BaseModel):
     email: EmailRecord
-    stages: list[AnalysisStage]
-    generated_response: str
-    is_simulated: bool = True
 
 
 class FeedbackCreate(BaseModel):

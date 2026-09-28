@@ -1,18 +1,65 @@
 import { useMutation } from "@tanstack/react-query";
-import { Check, ChevronRight, FileText, LockKeyhole, Paperclip, Play, RotateCcw, Sparkles, UploadCloud } from "lucide-react";
-import { useState } from "react";
+import { LockKeyhole, Play, RotateCcw, Sparkles, UploadCloud } from "lucide-react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiPost } from "@/lib/api";
 import type { AnalyzeResponse } from "@/types/mailmind";
 import AppShell from "@/components/layout/AppShell";
-import { CategoryBadge, PriorityBadge, SpamBadge } from "@/components/mailmind/StatusBadge";
 
 export default function Analyze() {
   const navigate = useNavigate();
   const [sender, setSender] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const mutation = useMutation({ mutationFn: () => apiPost<AnalyzeResponse>("/analysis", { sender: sender || "Unknown sender", subject, body }), onSuccess: (result) => navigate(`/inbox/${result.email.id}`) });
+  const [fileName, setFileName] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
+  const mutation = useMutation({
+    mutationFn: () => apiPost<AnalyzeResponse>("/analysis", { sender: sender || "Unknown sender", subject, body }),
+    onSuccess: (result) => navigate(`/inbox/${result.email.id}`),
+  });
   const canAnalyze = subject.trim().length > 2 && body.trim().length > 8;
-  return <AppShell><div className="page-stack" data-testid="analyze-page"><div className="page-heading compact"><div><div className="eyebrow"><Sparkles size={12} /> Intelligence lab</div><h1>Let AI understand your email.</h1><p>Paste a message and watch the full data science pipeline turn it into decision support.</p></div><div className="privacy-note"><LockKeyhole size={14} /> Private by design</div></div><div className="analyze-layout"><section className="paste-panel panel" data-testid="paste-email-panel"><div className="section-heading"><div><span className="eyebrow">Paste email</span><h2>Start with the message</h2></div><button className="quiet-button" onClick={() => { setSender(""); setSubject(""); setBody(""); }} data-testid="analyze-clear-button"><RotateCcw size={14} /> Clear</button></div><div className="field-grid"><label>Sender<input value={sender} onChange={(event) => setSender(event.target.value)} placeholder="e.g. security@company.com" data-testid="analyze-sender-input" /></label><label>Subject<input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="What is this email about?" data-testid="analyze-subject-input" /></label></div><label className="body-field">Email body<textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Paste the complete email body here..." data-testid="analyze-body-input" /></label><div className="paste-footer"><span><Paperclip size={14} /> Supports .eml, .txt, .pdf, .docx</span><button className="button-primary" onClick={() => mutation.mutate()} disabled={!canAnalyze || mutation.isPending} data-testid="analyze-submit-button">{mutation.isPending ? "Processing..." : "Analyze email"} <Play size={14} /></button></div>{mutation.isError && <div className="inline-error" data-testid="analyze-error">MailMind couldn’t complete the analysis. Try again.</div>}</section><aside className="pipeline-panel panel" data-testid="pipeline-panel"><div className="section-heading"><div><span className="eyebrow">Visible data science</span><h2>Analysis pipeline</h2></div><span className="pipeline-chip">{mutation.isPending ? "RUNNING" : "READY"}</span></div><div className="pipeline-steps">{["Ingesting", "Cleaning", "NLP processing", "Feature engineering", "ML classification", "Explainability", "Generative AI"].map((stage, index) => <div className={`pipeline-step ${mutation.isPending && index === 4 ? "active" : ""}`} key={stage}><div className="pipeline-node">{mutation.isPending && index === 4 ? <span className="pulse-node" /> : <Check size={13} />}</div><div><strong>{stage}</strong><span>{mutation.isPending && index === 4 ? "Calculating priority..." : index < 5 ? "Ready to process" : "Awaiting input"}</span></div>{index < 6 && <div className="pipeline-line" />}</div>)}</div><div className="upload-dropzone" data-testid="upload-dropzone"><UploadCloud size={19} /><strong>Or drop an email file here</strong><span>Drag & drop to analyze locally in this demo</span><button className="quiet-button" data-testid="choose-file-button">Choose file <ChevronRight size={14} /></button></div><div className="pipeline-note"><FileText size={15} /><span>Demo mode uses a deterministic local classifier. <strong>No external AI call is made.</strong></span></div></aside></div></div></AppShell>;
+
+  const readFile = async (file: File) => {
+    setFileName(file.name);
+    const text = await file.text();
+    setBody(text.slice(0, 8000));
+    if (!subject) setSubject(file.name.replace(/\.[^.]+$/, ""));
+  };
+
+  return <AppShell><div className="page-stack" data-testid="analyze-page">
+    <div className="page-heading compact">
+      <div><div className="eyebrow"><Sparkles size={12} /> New analysis</div><h1>Let AI understand your email.</h1><p>Paste an email or drop a file, and MailMind will explain what it is and what to do next.</p></div>
+      <div className="privacy-note"><LockKeyhole size={14} /> Private by design</div>
+    </div>
+    <div className="analyze-layout single">
+      <section className="paste-panel panel" data-testid="paste-email-panel">
+        <div className="section-heading">
+          <div><span className="eyebrow">Email</span><h2>Start with the message</h2></div>
+          <button className="quiet-button" onClick={() => { setSender(""); setSubject(""); setBody(""); setFileName(""); }} data-testid="analyze-clear-button"><RotateCcw size={14} /> Clear</button>
+        </div>
+        <div className="field-grid">
+          <label>Sender<input value={sender} onChange={(event) => setSender(event.target.value)} placeholder="e.g. rahul@company.com" data-testid="analyze-sender-input" /></label>
+          <label>Subject<input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="What is this email about?" data-testid="analyze-subject-input" /></label>
+        </div>
+        <label className="body-field">Email body<textarea value={body} onChange={(event) => setBody(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && canAnalyze) mutation.mutate(); }} placeholder="Paste the complete email body here..." data-testid="analyze-body-input" /></label>
+        <div
+          className="upload-dropzone"
+          data-testid="upload-dropzone"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void readFile(file); }}
+        >
+          <UploadCloud size={19} />
+          <strong>{fileName || "Or drop an email file here"}</strong>
+          <span>.eml or .txt — the text is loaded into the body above</span>
+          <input ref={fileInput} type="file" accept=".eml,.txt" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void readFile(file); }} data-testid="analyze-file-input" />
+          <button className="quiet-button" onClick={() => fileInput.current?.click()} data-testid="choose-file-button">Choose file</button>
+        </div>
+        <div className="paste-footer">
+          <span>Press Ctrl + Enter to analyze</span>
+          <button className="button-primary" onClick={() => mutation.mutate()} disabled={!canAnalyze || mutation.isPending} data-testid="analyze-submit-button">{mutation.isPending ? "Analyzing..." : "Analyze email"} <Play size={14} /></button>
+        </div>
+        {mutation.isError && <div className="inline-error" data-testid="analyze-error">MailMind couldn’t complete the analysis. Try again.</div>}
+      </section>
+    </div>
+  </div></AppShell>;
 }

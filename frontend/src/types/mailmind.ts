@@ -2,12 +2,6 @@ export type Priority = "Critical" | "High" | "Medium" | "Low" | "Informational";
 export type Category = "Work" | "Finance" | "Career" | "Education" | "Personal" | "Shopping" | "Travel";
 export type SpamStatus = "Legitimate" | "Spam" | "Suspicious";
 
-export interface ModelFactor {
-  label: string;
-  impact: number;
-  direction: "risk" | "trust";
-}
-
 export interface EmailRecord {
   id: string;
   sender: string;
@@ -28,7 +22,7 @@ export interface EmailRecord {
   summary: string;
   key_information: string[];
   entities: string[];
-  influencing_factors: ModelFactor[];
+  generated_response: string | null;
   is_simulated: boolean;
   created_at: string;
 }
@@ -91,15 +85,6 @@ export interface ModelInsightsResponse {
   is_simulated: boolean;
 }
 
-export interface AnalysisStage {
-  name: string;
-  detail: string;
-  status: "complete" | "active";
-}
-
 export interface AnalyzeResponse {
   email: EmailRecord;
-  stages: AnalysisStage[];
-  generated_response: string;
-  is_simulated: boolean;
 }
